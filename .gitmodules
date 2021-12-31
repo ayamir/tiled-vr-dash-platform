@@ -1,0 +1,3 @@
+[submodule "client/react-xrplayer"]
+	path = client/react-xrplayer
+	url = https://github.com/ayamir/react-xrplayer
