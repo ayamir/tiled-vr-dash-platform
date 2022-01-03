@@ -16,7 +16,7 @@ def create_dir(path):
     if not isExists:
         os.makedirs(path)
     isExists = os.path.exists(path)
-    if not isExists:
+    if isExists:
         return True
     else:
         return False
