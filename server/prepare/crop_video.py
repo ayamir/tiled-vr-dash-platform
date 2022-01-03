@@ -50,6 +50,7 @@ def crop_video(video_dir, name, output_dir):
 
     if res:
         # 4x3
+        cmder.infOut("Begin to crop tile ...")
         for i in range(0, 4):
             for j in range(0, 3):
                 x = TILE_WIDTH * i
@@ -58,6 +59,8 @@ def crop_video(video_dir, name, output_dir):
                 output_path = output_dir + tile_temp_dir + tile_name
                 crop(video_dir + name, TILE_WIDTH, TILE_HEIGHT,
                      x, y, output_path)
+    else:
+        cmder.errorOut("Create temp directory failed!")
 
 
 def generate_base_video(video_path, output_path):
