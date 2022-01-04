@@ -21,6 +21,10 @@ def errorOut(str):
     print(redStr('[Error]: ' + str))
 
 
+def warningOut(str):
+    print(yelloStr('[Warning]: ' + str))
+
+
 def successOut(str):
     print(greenStr('[Success]: ' + str))
 
