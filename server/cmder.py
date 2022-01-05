@@ -39,10 +39,8 @@ def runCmd(command):
                             stderr=subprocess.PIPE)
     res = subp.communicate()
     if subp.poll() == 0:
-        print(res[0])
         successOut(command)
         return 0
     else:
-        print(res[0])
         errorOut(command)
         return -1
