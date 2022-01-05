@@ -1,3 +1,4 @@
+import typing
 import cmder
 import os
 import os.path
@@ -9,7 +10,7 @@ from utils import TILE_HEIGHT
 from utils import TILE_WIDTH
 
 
-def get_video_list(dir_path):
+def get_video_list(dir_path: str) -> typing.List[str]:
     video_list = []
     for _, _, filenames in os.walk(dir_path):
         for filename in filenames:
@@ -17,7 +18,7 @@ def get_video_list(dir_path):
     return video_list
 
 
-def create_output_dir(dir_path):
+def create_output_dir(dir_path: str) -> bool:
     path = dir_path
     path = path.rstrip("/")
     isExists = os.path.exists(path)
@@ -30,14 +31,20 @@ def create_output_dir(dir_path):
         return False
 
 
-def crop(video_path, width, height, x, y, output_path):
+def crop(
+        video_path: str,
+        width: int,
+        height: int,
+        x: int,
+        y: int,
+        output_path: str) -> None:
     res = cmder.runCmd(
         f'ffmpeg -i {video_path} -vf crop={width}:{height}:{x}:{y} {output_path} -y')
     if res == -1:
         os._exit(-1)
 
 
-def crop_video(video_dir, name, output_dir):
+def crop_video(video_dir: str, name: str, output_dir: str) -> None:
     # 为该视频创建总文件夹
     root_dir_name = name.replace(".mp4", "") + "/"
     res = utils.create_dir(output_dir + root_dir_name)
@@ -63,14 +70,14 @@ def crop_video(video_dir, name, output_dir):
         cmder.errorOut("Create temp directory failed!")
 
 
-def generate_base_video(video_path, output_path):
+def generate_base_video(video_path: str, output_path: str) -> None:
     res = cmder.runCmd(
         f'ffmpeg -i {video_path} -vf scale=540x360 {output_path}')
     if res == -1:
         os._exit(-1)
 
 
-def start_crop_videos(video_dir, output_dir):
+def crop_videos(video_dir: str, output_dir: str) -> None:
     videoNames = get_video_list(workspace_dir)
     if (len(videoNames) == 0):
         print(cmder.redStr("ERROR: Not found video files"))
@@ -79,6 +86,3 @@ def start_crop_videos(video_dir, output_dir):
         print("There are " + str(len(videoNames)) + " videos in this path")
         print("Crop " + video_dir + name)
         crop_video(video_dir, name, output_dir)
-
-
-start_crop_videos(video_src_dir, video_output_dir)

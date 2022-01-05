@@ -3,7 +3,7 @@ import utils
 import os
 
 
-def dash_all_videos(video_output_dir):
+def dash_mpd(video_output_dir: str) -> None:
     dirs = utils.get_dirs_path_in_path(video_output_dir)
     for dirpath in dirs:
         cmder.infOut("Current video directory is " + dirpath)
@@ -21,6 +21,3 @@ def dash_all_videos(video_output_dir):
             out_mpd_path = os.path.join(tile_dir, "L1_dash.mpd")
             cmder.runCmd(
                 f'MP4Box -dash 1000 -rap -profile dashavc264:onDemand {tile_L1_path} {tile_L0_path} -out {out_mpd_path}')
-
-
-dash_all_videos(utils.video_output_dir)

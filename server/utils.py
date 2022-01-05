@@ -1,4 +1,5 @@
 import os
+import typing
 
 
 cwd = os.getcwd()
@@ -10,7 +11,7 @@ TILE_WIDTH = 640
 TILE_HEIGHT = 480
 
 
-def create_dir(path):
+def create_dir(path: str) -> bool:
     path = path.rstrip("/")
     isExists = os.path.exists(path)
     if not isExists:
@@ -22,7 +23,7 @@ def create_dir(path):
         return False
 
 
-def get_dirs_path_in_path(root_dir):
+def get_dirs_path_in_path(root_dir: str) -> typing.List[str]:
     dir_list = []
     isExists = os.path.exists(root_dir)
     if not isExists:
@@ -34,7 +35,7 @@ def get_dirs_path_in_path(root_dir):
     return dir_list
 
 
-def get_dirs_in_path(root_dir):
+def get_dirs_in_path(root_dir: str) -> typing.List[str]:
     dir_list = []
     isExists = os.path.exists(root_dir)
     if not isExists:
@@ -48,7 +49,7 @@ def get_dirs_in_path(root_dir):
 # 获取当前路径下的文件，返回文件全路径
 
 
-def get_files_in_path(root_dir):
+def get_files_in_path(root_dir: str) -> typing.List[str]:
     files_list = []
     isExists = os.path.exists(root_dir)
     if not isExists:
@@ -61,7 +62,7 @@ def get_files_in_path(root_dir):
 
 
 # 获取当前路径下的文件，返回文件全路径
-def get_files_path_in_path(root_dir):
+def get_files_path_in_path(root_dir: str) -> typing.List[str]:
     files_list = []
     isExists = os.path.exists(root_dir)
     if not isExists:

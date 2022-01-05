@@ -6,14 +6,19 @@ from utils import TILE_HEIGHT
 from utils import TILE_WIDTH
 
 
-def process(video_path, width, height, output_path, mark):
+def process(
+        video_path: str,
+        width: float,
+        height: float,
+        output_path: str,
+        mark: str) -> None:
     res = cmder.runCmd(
         f'ffmpeg -i {video_path} -vf scale={width}:{height},drawtext=fontcolor=white:fontsize=40:text=\'{mark}\':x=10:y=10 {output_path} -y')
     if res == -1:
         os._exit(-1)
 
 
-def start_process(workspace_dir):
+def transcode(workspace_dir: str) -> None:
     video_dirs = utils.get_dirs_in_path(workspace_dir)
     if len(video_dirs) != 1:
         print(
@@ -51,6 +56,3 @@ def start_process(workspace_dir):
                         output_dir,
                         "L0.mp4"),
                     f'{tile_name.replace(".mp4", "").replace("_","-")}-L0')
-
-
-start_process(video_output_dir)
