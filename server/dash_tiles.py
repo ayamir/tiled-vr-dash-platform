@@ -1,6 +1,7 @@
 import cmder
 import utils
 import os
+from pathlib import Path
 
 
 def dash_mpd(video_output_dir: str) -> None:
@@ -8,16 +9,22 @@ def dash_mpd(video_output_dir: str) -> None:
     for dirpath in dirs:
         cmder.infOut("Current video directory is " + dirpath)
         # 生成base_dash.mpd
-        base_video_path = os.path.join(dirpath, "base.mp4")
-        base_mpd_path = os.path.join(dirpath, "base_dash.mpd")
-        cmder.runCmd(
-            f'MP4Box -dash 1000 -rap -profile dashavc264:onDemand {base_video_path} -out {base_mpd_path}')
         tile_dirs = utils.get_dirs_path_in_path(dirpath)
+        # Fragment all tiles
+        video_list = list(Path(dirpath).rglob("*.mp4"))
+        for video in video_list:
+            video = str(video)
+            if video.find("-fragmented") == -1:
+                fragmented_video = video.replace(".mp4", "-fragmented.mp4")
+                cmder.runCmd(f"mp4fragment {video} {fragmented_video}")
+                os.remove(video)
+
         for tile_dir in tile_dirs:
             cmder.infOut("Current tile directory is " + tile_dir)
+            tile_L0_path = os.path.join(tile_dir, "L0-fragmented.mp4")
+            tile_L1_path = os.path.join(tile_dir, "L1-fragmented.mp4")
             # 生成每个tile的两种版本的mpd
-            tile_L0_path = os.path.join(tile_dir, "L0.mp4")
-            tile_L1_path = os.path.join(tile_dir, "L1.mp4")
-            out_mpd_path = os.path.join(tile_dir, "L1_dash.mpd")
+            out_path = os.path.join(tile_dir, "output")
             cmder.runCmd(
-                f'MP4Box -dash 1000 -rap -profile dashavc264:onDemand {tile_L1_path} {tile_L0_path} -out {out_mpd_path}')
+                f"mp4dash --profiles=on-demand {tile_L1_path} {tile_L0_path} -o {out_path}"
+            )
