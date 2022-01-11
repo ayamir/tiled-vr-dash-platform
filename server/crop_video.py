@@ -1,11 +1,11 @@
 import typing
+import math
 import cmder
 import os
 import os.path
 import utils
+from multi_version import transcode
 from utils import workspace_dir
-from utils import TILE_HEIGHT
-from utils import TILE_WIDTH
 
 
 def get_video_list(dir_path: str) -> typing.List[str]:
@@ -43,8 +43,29 @@ def crop_video(video_dir: str, name: str, output_dir: str) -> None:
     # 为该视频创建总文件夹
     root_dir_name = name.replace(".mp4", "") + "/"
     res = utils.create_dir(output_dir + root_dir_name)
+    output_root_dir = output_dir + root_dir_name
+    argu = "'{print $2}'"
+    _, video_width_str = cmder.runCmd(
+        f"mp4info {video_dir + name} | grep Width | awk {argu}"
+    )
+    _, video_height_str = cmder.runCmd(
+        f"mp4info {video_dir + name} | grep Height | awk {argu}"
+    )
+    tile_width = math.floor(int(video_width_str) / 4)
+    tile_height = math.floor(int(video_height_str) / 3)
+    base_width = tile_width + 120
+    base_height = tile_height + 120
+    cmder.infOut(f"tile width = {tile_width}")
+    cmder.infOut(f"tile height = {tile_height}")
+    cmder.infOut(f"base width = {base_width}")
+    cmder.infOut(f"base height = {base_height}")
     # 生成Base低质量版本
-    generate_base_video(video_dir + name, output_dir + root_dir_name + "base.mp4")
+    generate_base_video(
+        video_dir + name,
+        base_width,
+        base_height,
+        output_dir + root_dir_name + "base.mp4",
+    )
     # 创建存储tile视频的文件夹
     tile_temp_dir = root_dir_name + "tile_temp/"
     res = utils.create_dir(output_dir + tile_temp_dir)
@@ -54,17 +75,23 @@ def crop_video(video_dir: str, name: str, output_dir: str) -> None:
         cmder.infOut("Begin to crop tile ...")
         for i in range(0, 4):
             for j in range(0, 3):
-                x = TILE_WIDTH * i
-                y = TILE_HEIGHT * j
+                x = tile_width * i
+                y = tile_height * j
                 tile_name = "tile_" + str(i) + "_" + str(j) + ".mp4"
                 output_path = output_dir + tile_temp_dir + tile_name
-                crop(video_dir + name, TILE_WIDTH, TILE_HEIGHT, x, y, output_path)
+                crop(video_dir + name, tile_width, tile_height, x, y, output_path)
     else:
         cmder.errorOut("Create temp directory failed!")
 
+    transcode(output_root_dir, tile_width, tile_height)
 
-def generate_base_video(video_path: str, output_path: str) -> None:
-    res = cmder.runCmd(f"ffmpeg -i {video_path} -vf scale=540x360 {output_path}")
+
+def generate_base_video(
+    video_path: str, base_width: int, base_height: int, output_path: str
+) -> None:
+    res = cmder.runCmd(
+        f"ffmpeg -i {video_path} -vf scale={base_width}x{base_height} {output_path}"
+    )
     if res == -1:
         os._exit(-1)
 

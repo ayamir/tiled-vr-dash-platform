@@ -1,4 +1,5 @@
 import subprocess
+import typing
 
 
 def redStr(str: str):
@@ -33,14 +34,14 @@ def infOut(str: str):
     print(buleStr("[Info]: " + str))
 
 
-def runCmd(command: str):
+def runCmd(command: str) -> typing.Tuple:
     subp = subprocess.Popen(
         command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     res, err = subp.communicate()
     if subp.poll() == 0:
         successOut(command)
-        return 0
+        return 0, res.decode("utf-8")
     else:
         errorOut(err.decode("utf-8"))
-        return -1
+        return -1, err.decode("utf-8")

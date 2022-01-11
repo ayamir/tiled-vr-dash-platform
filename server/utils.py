@@ -7,9 +7,6 @@ workspace_dir = cwd + "/videos/"  # 批处理文件所在的目录
 video_src_dir = workspace_dir
 video_output_dir = cwd + "/output/"
 
-TILE_WIDTH = 640
-TILE_HEIGHT = 480
-
 
 def create_dir(path: str) -> bool:
     path = path.rstrip("/")
