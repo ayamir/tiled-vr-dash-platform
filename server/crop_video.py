@@ -4,8 +4,6 @@ import os
 import os.path
 import utils
 from utils import workspace_dir
-from utils import video_src_dir
-from utils import video_output_dir
 from utils import TILE_HEIGHT
 from utils import TILE_WIDTH
 
@@ -32,14 +30,11 @@ def create_output_dir(dir_path: str) -> bool:
 
 
 def crop(
-        video_path: str,
-        width: int,
-        height: int,
-        x: int,
-        y: int,
-        output_path: str) -> None:
+    video_path: str, width: int, height: int, x: int, y: int, output_path: str
+) -> None:
     res = cmder.runCmd(
-        f'ffmpeg -i {video_path} -vf crop={width}:{height}:{x}:{y} {output_path} -y')
+        f"ffmpeg -i {video_path} -vf crop={width}:{height}:{x}:{y} {output_path} -y"
+    )
     if res == -1:
         os._exit(-1)
 
@@ -49,8 +44,7 @@ def crop_video(video_dir: str, name: str, output_dir: str) -> None:
     root_dir_name = name.replace(".mp4", "") + "/"
     res = utils.create_dir(output_dir + root_dir_name)
     # 生成Base低质量版本
-    generate_base_video(video_dir + name, output_dir +
-                        root_dir_name + "base.mp4")
+    generate_base_video(video_dir + name, output_dir + root_dir_name + "base.mp4")
     # 创建存储tile视频的文件夹
     tile_temp_dir = root_dir_name + "tile_temp/"
     res = utils.create_dir(output_dir + tile_temp_dir)
@@ -64,25 +58,24 @@ def crop_video(video_dir: str, name: str, output_dir: str) -> None:
                 y = TILE_HEIGHT * j
                 tile_name = "tile_" + str(i) + "_" + str(j) + ".mp4"
                 output_path = output_dir + tile_temp_dir + tile_name
-                crop(video_dir + name, TILE_WIDTH, TILE_HEIGHT,
-                     x, y, output_path)
+                crop(video_dir + name, TILE_WIDTH, TILE_HEIGHT, x, y, output_path)
     else:
         cmder.errorOut("Create temp directory failed!")
 
 
 def generate_base_video(video_path: str, output_path: str) -> None:
-    res = cmder.runCmd(
-        f'ffmpeg -i {video_path} -vf scale=540x360 {output_path}')
+    res = cmder.runCmd(f"ffmpeg -i {video_path} -vf scale=540x360 {output_path}")
     if res == -1:
         os._exit(-1)
 
 
 def crop_videos(video_dir: str, output_dir: str) -> None:
-    videoNames = get_video_list(workspace_dir)
-    if (len(videoNames) == 0):
-        print(cmder.redStr("ERROR: Not found video files"))
+    video_names = get_video_list(workspace_dir)
+    if len(video_names) == 0:
+        cmder.redStr("ERROR: Not found video files")
         return
-    for name in videoNames:
-        print("There are " + str(len(videoNames)) + " videos in this path")
+    else:
+        ("There are " + str(len(video_names)) + " videos in this path")
+    for name in video_names:
         print("Crop " + video_dir + name)
         crop_video(video_dir, name, output_dir)
