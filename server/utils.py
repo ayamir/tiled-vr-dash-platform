@@ -46,9 +46,8 @@ def get_dirs_in_path(root_dir: str) -> typing.List[str]:
         break
     return dir_list
 
+
 # 获取当前路径下的文件，返回文件全路径
-
-
 def get_files_in_path(root_dir: str) -> typing.List[str]:
     files_list = []
     isExists = os.path.exists(root_dir)
