@@ -21,12 +21,12 @@ def calculate_wh(width: int, height: int) -> typing.Tuple:
 def process(
     video_path: str, width: float, height: float, output_path: str, mark: str
 ) -> None:
-    res = cmder.runCmd(
+    code, _ = cmder.runCmd(
         f"ffmpeg -i {video_path} \
         -vf scale={width}:{height},drawtext=fontcolor=white:fontsize=40:text='{mark}':x=10:y=10 \
         {output_path} -y"
     )
-    if res == -1:
+    if code == -1:
         os._exit(-1)
 
 

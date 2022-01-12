@@ -32,10 +32,10 @@ def create_output_dir(dir_path: str) -> bool:
 def crop(
     video_path: str, width: int, height: int, x: int, y: int, output_path: str
 ) -> None:
-    res = cmder.runCmd(
+    code, _ = cmder.runCmd(
         f"ffmpeg -i {video_path} -vf crop={width}:{height}:{x}:{y} {output_path} -y"
     )
-    if res == -1:
+    if code == -1:
         os._exit(-1)
 
 
@@ -89,10 +89,10 @@ def crop_video(video_dir: str, name: str, output_dir: str) -> None:
 def generate_base_video(
     video_path: str, base_width: int, base_height: int, output_path: str
 ) -> None:
-    res = cmder.runCmd(
+    code, _ = cmder.runCmd(
         f"ffmpeg -i {video_path} -vf scale={base_width}x{base_height} {output_path}"
     )
-    if res == -1:
+    if code == -1:
         os._exit(-1)
 
 
