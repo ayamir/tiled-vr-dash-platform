@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 
-def dash_mpd(video_output_dir: str) -> None:
+def dash_mpd(video_output_dir: str, profile: str = "on-demand") -> None:
     dirs = utils.get_dirs_path_in_path(video_output_dir)
     for dirpath in dirs:
         cmder.infOut("Current video directory is " + dirpath)
@@ -24,7 +24,7 @@ def dash_mpd(video_output_dir: str) -> None:
         base_output_path = os.path.join(dirpath, "output")
         if os.path.exists(base_path):
             cmder.runCmd(
-                f"mp4dash --profiles=on-demand {base_path} -o {base_output_path}"
+                f"mp4dash --profiles={profile} {base_path} -o {base_output_path}"
             )
 
         # Generate tiles mpd
@@ -34,5 +34,5 @@ def dash_mpd(video_output_dir: str) -> None:
             tile_L1_path = os.path.join(tile_dir, "L1-fragmented.mp4")
             out_path = os.path.join(tile_dir, "output")
             cmder.runCmd(
-                f"mp4dash --profiles=on-demand {tile_L1_path} {tile_L0_path} -o {out_path}"
+                f"mp4dash --profiles={profile} {tile_L1_path} {tile_L0_path} -o {out_path}"
             )
