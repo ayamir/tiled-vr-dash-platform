@@ -40,8 +40,8 @@ if __name__ == "__main__":
         "--layout",
         metavar="MxN",
         type=str,
-        help="3x4 means crop video to 3x4 tiles, 3x4 is applied by dafault.",
-        default="3x4",
+        help="4x3 means crop video to 4x3 tiles, 4x3 is applied by dafault.",
+        default="4x3",
         nargs="?",
     )
     args = parser.parse_args()
