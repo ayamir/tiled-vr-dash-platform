@@ -47,6 +47,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     profile = get_profile(args.profile)
     rows, cols = get_layout(args.layout)
+    cmder.infOut(f"Profils is {profile}")
+    cmder.infOut(f"Row is {rows}, col is {cols}")
 
     # 删除旧输出
     cmder.runCmd(f"bash -c 'rm -rf {video_output_dir}*'")
