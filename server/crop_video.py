@@ -2,7 +2,6 @@ import typing
 import math
 import cmder
 import os
-import os.path
 import utils
 from multi_version import transcode
 from utils import workspace_dir
@@ -59,20 +58,22 @@ def crop_video(video_dir: str, name: str, output_dir: str) -> None:
     cmder.infOut(f"tile height = {tile_height}")
     cmder.infOut(f"base width = {base_width}")
     cmder.infOut(f"base height = {base_height}")
+
     # 生成Base低质量版本
+    cmder.infOut("Begin to crop tile ...")
     generate_base_video(
         video_dir + name,
         base_width,
         base_height,
         output_dir + root_dir_name + "base.mp4",
     )
+
     # 创建存储tile视频的文件夹
     tile_temp_dir = root_dir_name + "tile_temp/"
     res = utils.create_dir(output_dir + tile_temp_dir)
 
     if res:
         # 4x3
-        cmder.infOut("Begin to crop tile ...")
         for i in range(0, 4):
             for j in range(0, 3):
                 x = tile_width * i
@@ -104,5 +105,5 @@ def crop_videos(video_dir: str, output_dir: str) -> None:
     else:
         ("There are " + str(len(video_names)) + " videos in this path")
     for name in video_names:
-        print("Crop " + video_dir + name)
+        cmder.infOut("Crop " + video_dir + name)
         crop_video(video_dir, name, output_dir)
