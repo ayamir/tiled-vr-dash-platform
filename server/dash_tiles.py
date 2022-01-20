@@ -34,5 +34,5 @@ def dash_mpd(video_output_dir: str, profile: str = "on-demand") -> None:
             tile_L1_path = os.path.join(tile_dir, "L1-fragmented.mp4")
             out_path = os.path.join(tile_dir, "output")
             cmder.runCmd(
-                f"mp4dash --profiles={profile} {tile_L1_path} {tile_L0_path} -o {out_path}"
+                f"mp4dash --profiles={profile} '{tile_L1_path}' '[type=video]{tile_L0_path}' -o {out_path}"
             )
