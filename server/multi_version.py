@@ -43,7 +43,7 @@ def transcode(video_dir: str, tile_width: int, tile_height: int) -> None:
         for tile_name in tiles:
             video_path = os.path.join(tiled_video_root_dir, tile_name)
             output_dir = os.path.join(video_dir, tile_name.replace(".mp4", ""))
-            l0_width, l0_height = calculate_wh(tile_width, tile_width)
+            l0_width, l0_height = calculate_wh(tile_width, tile_height)
             utils.create_dir(output_dir)
             process(
                 video_path,
