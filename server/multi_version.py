@@ -6,14 +6,16 @@ import shutil
 import utils
 
 
-def calculate_wh(width: int, height: int) -> typing.Tuple:
-    w = math.floor(width / 2)
-    h = math.floor(height / 2)
+def calculate_wh(width: int, height: int, divisor1: int, divisor2: int) -> typing.Tuple:
+    w = math.floor(width / divisor1)
+    h = math.floor(height / divisor2)
 
-    if w % 2 == 0:
-        return w, -2
-    elif h % 2 == 0:
-        return -2, h
+    if w % 2 == 0 and h % 2 == 0:
+        return w, h
+    if w % 2 == 0 and h % 2 != 0:
+        return w, h + 1
+    elif h % 2 == 0 and w % 2 != 0:
+        return w + 1, h
     else:
         return w + 1, h + 1
 
@@ -39,7 +41,7 @@ def transcode(video_dir: str, tile_width: int, tile_height: int) -> None:
         for tile_name in tiles:
             video_path = os.path.join(tiled_video_root_dir, tile_name)
             output_dir = os.path.join(video_dir, tile_name.replace(".mp4", ""))
-            l0_width, l0_height = calculate_wh(tile_width, tile_width)
+            l0_width, l0_height = calculate_wh(tile_width, tile_width, 2, 2)
             utils.create_dir(output_dir)
             process(
                 video_path,

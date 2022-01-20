@@ -1,9 +1,9 @@
 import typing
-import math
 import cmder
 import os
 import utils
 from multi_version import transcode
+from multi_version import calculate_wh
 from utils import workspace_dir
 
 
@@ -52,8 +52,9 @@ def crop_video(
     _, video_height_str = cmder.runCmd(
         f"mp4info {video_dir + name} | grep Height | awk {argu}"
     )
-    tile_width = math.floor(int(video_width_str) / rows)
-    tile_height = math.floor(int(video_height_str) / cols)
+    tile_width, tile_height = calculate_wh(
+        eval(video_width_str), eval(video_height_str), rows, cols
+    )
     base_width = tile_width + 120
     base_height = tile_height + 120
     cmder.infOut(f"tile width = {tile_width}")
