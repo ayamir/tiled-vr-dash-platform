@@ -39,7 +39,9 @@ def crop(
         os._exit(-1)
 
 
-def crop_video(video_dir: str, name: str, output_dir: str) -> None:
+def crop_video(
+    video_dir: str, name: str, output_dir: str, rows: int, cols: int
+) -> None:
     # 为该视频创建总文件夹
     root_dir_name = name.replace(".mp4", "") + "/"
     res = utils.create_dir(output_dir + root_dir_name)
@@ -51,8 +53,8 @@ def crop_video(video_dir: str, name: str, output_dir: str) -> None:
     _, video_height_str = cmder.runCmd(
         f"mp4info {video_dir + name} | grep Height | awk {argu}"
     )
-    tile_width = math.floor(int(video_width_str) / 4)
-    tile_height = math.floor(int(video_height_str) / 3)
+    tile_width = math.floor(int(video_width_str) / rows)
+    tile_height = math.floor(int(video_height_str) / cols)
     base_width = tile_width + 120
     base_height = tile_height + 120
     cmder.infOut(f"tile width = {tile_width}")
@@ -71,10 +73,9 @@ def crop_video(video_dir: str, name: str, output_dir: str) -> None:
     res = utils.create_dir(output_dir + tile_temp_dir)
 
     if res:
-        # 4x3
         cmder.infOut("Begin to crop tile ...")
-        for i in range(0, 4):
-            for j in range(0, 3):
+        for i in range(0, rows):
+            for j in range(0, cols):
                 x = tile_width * i
                 y = tile_height * j
                 tile_name = "tile_" + str(i) + "_" + str(j) + ".mp4"
@@ -96,7 +97,7 @@ def generate_base_video(
         os._exit(-1)
 
 
-def crop_videos(video_dir: str, output_dir: str) -> None:
+def crop_videos(video_dir: str, output_dir: str, rows: int, cols: int) -> None:
     video_names = get_video_list(workspace_dir)
     if len(video_names) == 0:
         cmder.redStr("ERROR: Not found video files")
@@ -105,4 +106,4 @@ def crop_videos(video_dir: str, output_dir: str) -> None:
         ("There are " + str(len(video_names)) + " videos in this path")
     for name in video_names:
         print("Crop " + video_dir + name)
-        crop_video(video_dir, name, output_dir)
+        crop_video(video_dir, name, output_dir, rows, cols)
