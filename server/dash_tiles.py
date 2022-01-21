@@ -1,3 +1,4 @@
+import json
 import cmder
 import utils
 import os
@@ -36,3 +37,50 @@ def dash_mpd(video_output_dir: str, profile: str = "on-demand") -> None:
             cmder.runCmd(
                 f"mp4dash --profiles={profile} '{tile_L1_path}' '[type=video]{tile_L0_path}' -o {out_path}"
             )
+
+
+def generate_json(
+    rows: int,
+    cols: int,
+    video_output_dir: str,
+    url_prefix: str = "http://localhost:80/~ayamir/070",
+    fov: int = 100,
+    is_rotate: bool = False,
+    rotate_speed: float = 1.0,
+    volume: int = 90,
+    muted: bool = False,
+) -> None:
+
+    url_suffix = "/output/stream.mpd"
+
+    res_urls = []
+    res_url = {
+        "type": "tiled-dash",
+        "res_url": [url_prefix + url_suffix],
+        "rows": rows,
+        "cols": cols,
+        "panoramic_type": "360",
+        "radius": 500,
+    }
+
+    for i in range(cols):
+        for j in range(rows):
+            res_url["res_url"].append(
+                url_prefix + "/tile_" + str(j) + "_" + str(i) + url_suffix
+            )
+
+    res_urls.append(res_url)
+    obj = {
+        "camera_fov": fov,
+        "enable_auto_rotate": is_rotate,
+        "auto_rotate_speed": rotate_speed,
+        "volume": volume,
+        "muted": muted,
+        "res_urls": res_urls,
+    }
+
+    out_path = video_output_dir + "view-tiled.json"
+    dest = os.getcwd() + "/../client/react-xrplayer/public/mock/view-tiled.json"
+    with open(out_path, "w") as outfile:
+        json.dump(obj, outfile)
+        cmder.runCmd(f"mv {out_path} {dest}")

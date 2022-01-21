@@ -7,6 +7,7 @@ from utils import video_output_dir
 from utils import video_src_dir
 from crop_video import crop_videos
 from dash_tiles import dash_mpd
+from dash_tiles import generate_json
 
 
 def get_profile(exp: str) -> str:
@@ -29,33 +30,48 @@ def get_layout(exp: str) -> typing.Tuple:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Crop Video and Dash Tiles.")
     parser.add_argument(
-        "--profile",
-        metavar="1",
+        "--json",
+        metavar="0",
         type=int,
-        help="0 means 'VOD', 1 means 'LIVE', 1 is applied by default.",
-        default=1,
+        help="1 means only generate json. Dafault value is 0.",
+        default=0,
         nargs="?",
     )
     parser.add_argument(
         "--layout",
         metavar="MxN",
         type=str,
-        help="4x3 means crop video to 4x3 tiles, 4x3 is applied by dafault.",
+        help="4x3 means crop video to 4x3 tiles. Dafault value is 4x3.",
         default="4x3",
+        nargs="?",
+    )
+    parser.add_argument(
+        "--profile",
+        metavar="1",
+        type=int,
+        help="0 means 'VOD'; 1 means 'LIVE'. Default value is 1.",
+        default=1,
         nargs="?",
     )
     args = parser.parse_args()
     profile = get_profile(args.profile)
     rows, cols = get_layout(args.layout)
+    is_json = True if args.json == 1 else False
     cmder.infOut(f"Profils is {profile}")
     cmder.infOut(f"Row is {rows}, col is {cols}")
 
-    # 删除旧输出
-    cmder.runCmd(f"bash -c 'rm -rf {video_output_dir}*'")
-    # 切分tile
-    crop_videos(video_src_dir, video_output_dir, rows, cols)
-    # 生成dash资源和mpd
-    dash_mpd(video_output_dir, profile=profile)
-    # 拷贝新输出到文件服务器指定位置
-    cmder.runCmd(f"bash -c 'rm -rf {os.getenv('HOME')}/public_html/*'")
-    cmder.runCmd(f"bash -c 'cp -r {video_output_dir}* {os.getenv('HOME')}/public_html'")
+    # 生成客户端请求的 json 文件
+    generate_json(rows, cols, video_output_dir)
+
+    if not is_json:
+        # 删除旧输出
+        cmder.runCmd(f"bash -c 'rm -rf {video_output_dir}*'")
+        # 切分tile
+        crop_videos(video_src_dir, video_output_dir, rows, cols)
+        # 生成 dash 资源和 mpd
+        dash_mpd(video_output_dir, profile=profile)
+        # 拷贝新输出到文件服务器指定位置
+        cmder.runCmd(f"bash -c 'rm -rf {os.getenv('HOME')}/public_html/*'")
+        cmder.runCmd(
+            f"bash -c 'cp -r {video_output_dir}* {os.getenv('HOME')}/public_html'"
+        )
