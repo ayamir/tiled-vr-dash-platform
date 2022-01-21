@@ -57,4 +57,5 @@ if __name__ == "__main__":
     # 生成dash资源和mpd
     dash_mpd(video_output_dir, profile=profile)
     # 拷贝新输出到文件服务器指定位置
+    cmder.runCmd(f"bash -c 'rm -rf {os.getenv('HOME')}/public_html/*'")
     cmder.runCmd(f"bash -c 'cp -r {video_output_dir}* {os.getenv('HOME')}/public_html'")
