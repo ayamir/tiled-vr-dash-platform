@@ -40,16 +40,20 @@ def dash_mpd(video_output_dir: str, profile: str = "on-demand") -> None:
 
 
 def generate_json(
+    is_https: bool,
     rows: int,
     cols: int,
     video_output_dir: str,
-    url_prefix: str = "http://localhost:80/~ayamir/070",
+    url_prefix: str = "http://192.168.1.129/~ayamir/070",
     fov: int = 100,
     is_rotate: bool = False,
     rotate_speed: float = 1.0,
     volume: int = 90,
     muted: bool = False,
 ) -> None:
+
+    if is_https:
+        url_prefix = "https://192.168.1.129/files/070"
 
     url_suffix = "/output/stream.mpd"
 

@@ -30,6 +30,14 @@ def get_layout(exp: str) -> typing.Tuple:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Crop Video and Dash Tiles.")
     parser.add_argument(
+        "--https",
+        metavar="0",
+        type=int,
+        help="1 means enable https. Default value is 0.",
+        default=0,
+        nargs="?",
+    )
+    parser.add_argument(
         "--json",
         metavar="0",
         type=int,
@@ -54,6 +62,7 @@ if __name__ == "__main__":
         nargs="?",
     )
     args = parser.parse_args()
+    is_https = True if args.https == 1 else False
     profile = get_profile(args.profile)
     rows, cols = get_layout(args.layout)
     is_json = True if args.json == 1 else False
@@ -61,7 +70,7 @@ if __name__ == "__main__":
     cmder.infOut(f"Row is {rows}, col is {cols}")
 
     # 生成客户端请求的 json 文件
-    generate_json(rows, cols, video_output_dir)
+    generate_json(is_https, rows, cols, video_output_dir)
 
     if not is_json:
         # 删除旧输出
