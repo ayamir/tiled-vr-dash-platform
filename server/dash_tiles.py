@@ -52,10 +52,12 @@ def generate_json(
     muted: bool = False,
 ) -> None:
 
+    url_suffix = "/output/stream.mpd"
+    dest = utils.cwd + "/../client/react-xrplayer/public/mock/view-tiled.json"
+
     if is_https:
         url_prefix = "https://192.168.1.129/files/070"
-
-    url_suffix = "/output/stream.mpd"
+        dest = "/opt/player/react-xrplayer/mock/view-tiled.json"
 
     res_urls = []
     res_url = {
@@ -84,7 +86,7 @@ def generate_json(
     }
 
     out_path = video_output_dir + "view-tiled.json"
-    dest = os.getcwd() + "/../client/react-xrplayer/public/mock/view-tiled.json"
+
     with open(out_path, "w") as outfile:
         json.dump(obj, outfile)
         cmder.runCmd(f"mv {out_path} {dest}")

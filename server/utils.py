@@ -2,7 +2,7 @@ import os
 import typing
 
 
-cwd = os.getcwd()
+cwd = os.path.dirname(os.path.realpath(__file__))
 workspace_dir = cwd + "/videos/"  # 批处理文件所在的目录
 video_src_dir = workspace_dir
 video_output_dir = cwd + "/output/"
