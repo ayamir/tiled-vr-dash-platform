@@ -27,7 +27,7 @@ def process(
 ) -> None:
     code, _ = cmder.runCmd(
         f"ffmpeg -i {video_path} \
-        -vf scale={width}:{height},drawtext=fontcolor=white:fontsize=40:text='{mark}':x=10:y=10 \
+                -vf scale={width}:{height},drawtext=fontcolor=white:fontfile='./assets/RobotoMono-Bold.ttf':fontsize=40:text='{mark}':x=10:y=10 \
         {output_path} -y"
     )
     if code == -1:
