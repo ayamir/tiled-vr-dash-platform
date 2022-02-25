@@ -49,8 +49,8 @@ if __name__ == "__main__":
         "--layout",
         metavar="MxN",
         type=str,
-        help="4x3 means crop video to 4x3 tiles. Dafault value is 4x3.",
-        default="4x3",
+        help="6x4 means crop video to 6x4 tiles. Dafault value is 6x4.",
+        default="6x4",
         nargs="?",
     )
     parser.add_argument(
