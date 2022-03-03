@@ -26,9 +26,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
     <meta name='mobile-web-app-capable' content='yes'>
     <meta name='apple-mobile-web-app-capable' content='yes'>
-    <link rel='icon' type='image/png' sizes='32x32' href='../favicon-32x32.png'>
-    <link rel='icon' type='image/png' sizes='96x96' href='../favicon-96x96.png'>
-    <link rel='stylesheet' href='../css/common.css'>
+    <link rel='icon' type='image/png' sizes='32x32' href='./media/favicon-32x32.png'>
+    <link rel='icon' type='image/png' sizes='96x96' href='./media/favicon-96x96.png'>
+    <link rel='stylesheet' href='./css/common.css'>
 
     <title>Equirect Layer</title>
     <!-- Stereo layer dependency -->
@@ -207,13 +207,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 				space: refSpace,
 				viewPixelWidth: baseWidth / (baseLayout === "stereo-left-right" ? 2 : 1),
 				viewPixelHeight: baseHeight / (baseLayout === "stereo-top-bottom" ? 2 : 1),
+                centralHorizontalAngle: Math.PI * baseAngle / 180,
+                upperVerticalAngle: Math.PI / 2.0,
+                lowerVerticalAngle: -Math.PI / 2.0,
+                radius: baseRadius,
 				layout: baseLayout,
 			});
 
-			eqrtLayer.centralHorizontalAngle = Math.PI * baseAngle / 180;
-			eqrtLayer.upperVerticalAngle = Math.PI / 2.0;
-			eqrtLayer.lowerVerticalAngle = -Math.PI / 2.0;
-			eqrtLayer.radius = baseRadius;
 			session.updateRenderState({layers: [eqrtLayer, projLayer]});
 
 			session.requestAnimationFrame(onXRFrame);
