@@ -2,9 +2,10 @@ import typing
 import cmder
 import os
 import utils
+from utils import workspace_dir
 from multi_version import transcode
 from multi_version import calculate_wh
-from utils import workspace_dir
+from dash_tiles import generate_json_webxr
 
 
 def get_video_list(dir_path: str) -> typing.List[str]:
@@ -39,7 +40,7 @@ def crop(
 
 
 def crop_video(
-    video_dir: str, name: str, output_dir: str, rows: int, cols: int
+    video_dir: str, name: str, output_dir: str, rows: int, cols: int, is_json: bool
 ) -> None:
     # 为该视频创建总文件夹
     root_dir_name = name.replace(".mp4", "") + "/"
@@ -62,32 +63,43 @@ def crop_video(
     cmder.infOut(f"base width = {base_width}")
     cmder.infOut(f"base height = {base_height}")
 
-    # 生成Base低质量版本
-    cmder.infOut("Begin to crop tile ...")
-    generate_base_video(
-        video_dir + name,
-        base_width,
-        base_height,
-        output_dir + root_dir_name + "base.mp4",
-    )
-
-    # 创建存储tile视频的文件夹
-    tile_temp_dir = root_dir_name + "tile_temp/"
-    res = utils.create_dir(output_dir + tile_temp_dir)
-
-    if res:
-        cmder.infOut("Begin to crop tile ...")
-        for i in range(0, rows):
-            for j in range(0, cols):
-                x = tile_width * i
-                y = tile_height * j
-                tile_name = "tile_" + str(i) + "_" + str(j) + ".mp4"
-                output_path = output_dir + tile_temp_dir + tile_name
-                crop(video_dir + name, tile_width, tile_height, x, y, output_path)
+    if is_json:
+        generate_json_webxr(
+            rows,
+            cols,
+            eval(video_width_str),
+            eval(video_height_str),
+            tile_width,
+            tile_height,
+            output_dir,
+        )
     else:
-        cmder.errorOut("Create temp directory failed!")
+        # 生成Base低质量版本
+        cmder.infOut("Begin to crop tile ...")
+        generate_base_video(
+            video_dir + name,
+            base_width,
+            base_height,
+            output_dir + root_dir_name + "base.mp4",
+        )
 
-    transcode(output_root_dir, tile_width, tile_height)
+        # 创建存储tile视频的文件夹
+        tile_temp_dir = root_dir_name + "tile_temp/"
+        res = utils.create_dir(output_dir + tile_temp_dir)
+
+        if res:
+            cmder.infOut("Begin to crop tile ...")
+            for i in range(0, rows):
+                for j in range(0, cols):
+                    x = tile_width * i
+                    y = tile_height * j
+                    tile_name = "tile_" + str(i) + "_" + str(j) + ".mp4"
+                    output_path = output_dir + tile_temp_dir + tile_name
+                    crop(video_dir + name, tile_width, tile_height, x, y, output_path)
+        else:
+            cmder.errorOut("Create temp directory failed!")
+
+        transcode(output_root_dir, tile_width, tile_height)
 
 
 def generate_base_video(
@@ -100,7 +112,9 @@ def generate_base_video(
         os._exit(-1)
 
 
-def crop_videos(video_dir: str, output_dir: str, rows: int, cols: int) -> None:
+def crop_videos(
+    video_dir: str, output_dir: str, rows: int, cols: int, is_json: bool
+) -> None:
     video_names = get_video_list(workspace_dir)
     if len(video_names) == 0:
         cmder.redStr("ERROR: Not found video files")
@@ -109,4 +123,4 @@ def crop_videos(video_dir: str, output_dir: str, rows: int, cols: int) -> None:
         ("There are " + str(len(video_names)) + " videos in this path")
     for name in video_names:
         cmder.infOut("Crop " + video_dir + name)
-        crop_video(video_dir, name, output_dir, rows, cols)
+        crop_video(video_dir, name, output_dir, rows, cols, is_json)

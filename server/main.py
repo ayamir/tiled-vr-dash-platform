@@ -71,12 +71,13 @@ if __name__ == "__main__":
 
     # 生成客户端请求的 json 文件
     generate_json(is_https, rows, cols, video_output_dir)
+    crop_videos(video_src_dir, video_output_dir, rows, cols, is_json)
 
     if not is_json:
         # 删除旧输出
         cmder.runCmd(f"bash -c 'rm -rf {video_output_dir}*'")
         # 切分tile
-        crop_videos(video_src_dir, video_output_dir, rows, cols)
+        crop_videos(video_src_dir, video_output_dir, rows, cols, False)
         # 生成 dash 资源和 mpd
         dash_mpd(video_output_dir, profile=profile)
         # 拷贝新输出到文件服务器指定位置

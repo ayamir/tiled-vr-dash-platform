@@ -90,3 +90,42 @@ def generate_json(
     with open(out_path, "w") as outfile:
         json.dump(obj, outfile)
         cmder.runCmd(f"mv {out_path} {dest}")
+
+
+def generate_json_webxr(
+    rows: int,
+    cols: int,
+    base_width: int,
+    base_height: int,
+    tile_width: int,
+    tile_height: int,
+    video_output_dir: str,
+    url_prefix: str = "https://192.168.1.129/files/avc",
+):
+    url_suffix = "/output/stream.mpd"
+    dest = utils.cwd + "/../client/webxr-samples/layers-samples/source.json"
+
+    urls = []
+
+    for i in range(cols):
+        for j in range(rows):
+            urls.append(url_prefix + "/tile_" + str(j) + "_" + str(i) + url_suffix)
+
+    obj = {
+        "angle": 360,
+        "radius": 10,
+        "fps": 30,
+        "rows": rows,
+        "cols": cols,
+        "baseWidth": base_width,
+        "baseHeight": base_height,
+        "tileWidth": tile_width,
+        "tileHeight": tile_height,
+        "layout": "stereo",
+        "urls": urls,
+    }
+
+    out_path = video_output_dir + "source.json"
+    with open(out_path, "w") as f:
+        json.dump(obj, f)
+        cmder.runCmd(f"mv {out_path} {dest}")
