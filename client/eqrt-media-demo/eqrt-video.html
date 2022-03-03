@@ -35,6 +35,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <script src="./js/wglu/wglu-program.js"></script>
     <script src="./js/wglu/wglu-url.js"></script>
     <script src="./js/stereo-util.js"></script>
+    <!-- Dash video dependency -->
+    <script src="./js/dash/mediasync.js"></script>
+    <script src="./js/dash/timingsrc-v2.js"></script>
+    <script src="./js/dash/dash.all.min.js"></script>
 </head>
 
 <body>
@@ -71,6 +75,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let cols = 0;
 	let urls = null;
 
+	let isReady = [];
+	let isSelected = [];
+	let enhanceVideos = [];
+	let enhanceDash = [];
+	let videoMediaSync = [];
+	let timingSyncSrc = null;
+
 	// XR globals.
 	let xrButton = null;
 	let xrSession = null;
@@ -105,6 +116,82 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	});
 	scene.addNode(menuSystem.getMenuBarNode());
 
+	function createEnhanceNode(sum) {
+		for (let i = 0; i < sum; i++) {
+			enhanceVideos.push(null);
+			enhanceDash.push(null);
+			videoMediaSync.push(null);
+		}
+	}
+
+	function initVideoNode(video, width, height) {
+		video.width = width;
+		video.height = height;
+		video.loop = true;
+		video.crossOrigin = "anonymous";
+		video.preload = "auto";
+		video.autoplay = false;
+		video.muted = true;
+		video.allowsInlineMediaPlayBack = true;
+		video.setAttribute(
+			"webkit-playsinline",
+			"webkit-playsinline"
+		);
+		video.setAttribute("webkit-playsinline", true);
+		video.setAttribute("playsinline", true);
+		video.setAttribute("preload", "auto");
+		video.setAttribute("x-webkit-airplay", "allow");
+		video.setAttribute("x5-playsinline", true);
+		video.setAttribute("x5-video-player-type", "h5");
+		video.setAttribute("x5-video-player-fullscreen", false);
+		video.setAttribute("x5-video-orientation", "portrait");
+		video.setAttribute("style", "object-fit: fill");
+		video.setAttribute("loop", "loop");
+	}
+
+	async function loadTileVideo(id, width, height) {
+		if (enhanceVideos[id] === null) {
+			let video = document.createElement("video");
+			initVideoNode(video, width, height);
+			enhanceVideos[id] = video;
+			video.load();
+		}
+		let video = enhanceVideos[id];
+		if (enhanceDash[id] === null) {
+			let dash = dashjs.MediaPlayer().create();
+			dash.initialize(video, urls[id], true);
+			dash.updateSettings({
+				streaming: {
+					stableBufferTime: 3, // 一般质量下，稳定期的buffer大小
+					bufferTimeAtTopQuality: 5, // 如果使用的是最高质量，给予其更高的buffer长度
+					bufferTimeAtTopQualityLongForm: 20, // 当内容被判断为LongForm时，最高质量给予的buffer长度
+					longFormContentDurationThreshold: 200, // 多长被判断为long form内容
+					scheduleWhilePaused: false, // 当播放pause时，阻止后台下载
+					fastSwitchEnabled: true // 当视频的quality发生up时，清空之后的buffer，换取最新版本的内容
+				}
+			});
+			enhanceDash[id] = dash;
+		}
+		if (videoMediaSync[id] === null) {
+			videoMediaSync[id] = new MCorp.mediaSync(
+				enhanceVideos[id],
+				timingSyncSrc
+			);
+		} else {
+			videoMediaSync[id].pause(false);
+		}
+		isSelected[id] = true;
+
+		video.currentTime = baseVideo.currentTime;
+		await video.play();
+	}
+
+	function loadTileVideos(sum) {
+        for (let i = 0; i < sum; i++) {
+			loadTileVideo(i, tileWidth, tileHeight);
+        }
+	}
+
 	function myFetch(source) {
 		return fetch(source).then((response) => {
 			return response.json();
@@ -129,6 +216,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		console.log(baseAngle, baseRadius, baseFPS, baseLayout);
 		console.log(rows, cols, tileWidth, tileHeight);
 		console.log(baseUrl, urls);
+
+		let sum = rows * cols;
+		createEnhanceNode(sum);
 
 		xrButton = new WebXRButton({
 			onRequestSession: onRequestSession,
@@ -192,7 +282,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		baseVideo.preload = 'auto';
 		baseVideo.autoload = true;
 		baseVideo.src = baseUrl;
-		baseVideo.play();
+		baseVideo.addEventListener("canplaythrough", () => {
+			baseVideo.play();
+			timingSyncSrc = new TIMINGSRC.TimingObject({
+				position: baseVideo.currentTime,
+			});
+        }, false);
 
 		setInterval(function () {
 			if (baseVideo.readyState >= baseVideo.HAVE_CURRENT_DATA) {
