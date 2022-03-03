@@ -30,11 +30,19 @@ def get_layout(exp: str) -> typing.Tuple:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Crop Video and Dash Tiles.")
     parser.add_argument(
+        "--webxr",
+        metavar="0",
+        type=int,
+        help="1 means webxr. Default value is 1.",
+        default=1,
+        nargs="?",
+    )
+    parser.add_argument(
         "--https",
         metavar="0",
         type=int,
-        help="1 means enable https. Default value is 0.",
-        default=0,
+        help="1 means enable https. Default value is 1.",
+        default=1,
         nargs="?",
     )
     parser.add_argument(
@@ -62,6 +70,7 @@ if __name__ == "__main__":
         nargs="?",
     )
     args = parser.parse_args()
+    is_webxr = True if args.webxr == 1 else False
     is_https = True if args.https == 1 else False
     profile = get_profile(args.profile)
     rows, cols = get_layout(args.layout)
@@ -69,19 +78,26 @@ if __name__ == "__main__":
     cmder.infOut(f"Profils is {profile}")
     cmder.infOut(f"Row is {rows}, col is {cols}")
 
-    # 生成客户端请求的 json 文件
-    generate_json(is_https, rows, cols, video_output_dir)
-    crop_videos(video_src_dir, video_output_dir, rows, cols, is_json)
+    if not is_webxr:
+        # 生成客户端请求的 json 文件
+        generate_json(is_https, rows, cols, video_output_dir)
 
-    if not is_json:
+        if not is_json:
+            # 删除旧输出
+            cmder.runCmd(f"bash -c 'rm -rf {video_output_dir}*'")
+            # 切分tile
+            crop_videos(video_src_dir, video_output_dir, rows, cols, is_webxr)
+            # 生成 dash 资源和 mpd
+            dash_mpd(video_output_dir, profile=profile)
+            # 拷贝新输出到文件服务器指定位置
+            cmder.runCmd(f"bash -c 'rm -rf {os.getenv('HOME')}/public_html/*'")
+            cmder.runCmd(
+                f"bash -c 'cp -r {video_output_dir}* {os.getenv('HOME')}/public_html'"
+            )
+    else:
         # 删除旧输出
         cmder.runCmd(f"bash -c 'rm -rf {video_output_dir}*'")
         # 切分tile
-        crop_videos(video_src_dir, video_output_dir, rows, cols, False)
+        crop_videos(video_src_dir, video_output_dir, rows, cols, is_webxr)
         # 生成 dash 资源和 mpd
         dash_mpd(video_output_dir, profile=profile)
-        # 拷贝新输出到文件服务器指定位置
-        cmder.runCmd(f"bash -c 'rm -rf {os.getenv('HOME')}/public_html/*'")
-        cmder.runCmd(
-            f"bash -c 'cp -r {video_output_dir}* {os.getenv('HOME')}/public_html'"
-        )

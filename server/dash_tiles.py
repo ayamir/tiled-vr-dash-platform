@@ -103,7 +103,7 @@ def generate_json_webxr(
     url_prefix: str = "https://192.168.1.129/files/avc",
 ):
     url_suffix = "/output/stream.mpd"
-    dest = utils.cwd + "/../client/webxr-samples/layers-samples/source.json"
+    dest = utils.cwd + "/../client/eqrt-media-demo/source.json"
 
     urls = []
 

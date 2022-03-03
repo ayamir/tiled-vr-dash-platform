@@ -40,80 +40,70 @@ def crop(
 
 
 def crop_video(
-    video_dir: str, name: str, output_dir: str, rows: int, cols: int, is_json: bool
+    video_dir: str, name: str, output_dir: str, rows: int, cols: int, is_webxr: bool
 ) -> None:
     # 为该视频创建总文件夹
     root_dir_name = name.replace(".mp4", "") + "/"
     res = utils.create_dir(output_dir + root_dir_name)
     output_root_dir = output_dir + root_dir_name
     argu = "'{print $2}'"
-    _, video_width_str = cmder.runCmd(
+    _, video_width = cmder.runCmd(
         f"mp4info {video_dir + name} | grep Width | awk {argu}"
     )
-    _, video_height_str = cmder.runCmd(
+    _, video_height = cmder.runCmd(
         f"mp4info {video_dir + name} | grep Height | awk {argu}"
     )
-    tile_width, tile_height = calculate_wh(
-        eval(video_width_str), eval(video_height_str), rows, cols
-    )
-    base_width = tile_width + 120
-    base_height = tile_height + 120
+    video_width = eval(video_width)
+    video_height = eval(video_height)
+    tile_width, tile_height = calculate_wh(video_width, video_height, rows, cols)
+    cmder.infOut(f"video width = {video_width}")
+    cmder.infOut(f"video height = {video_height}")
     cmder.infOut(f"tile width = {tile_width}")
     cmder.infOut(f"tile height = {tile_height}")
-    cmder.infOut(f"base width = {base_width}")
-    cmder.infOut(f"base height = {base_height}")
 
-    if is_json:
+    if is_webxr:
         generate_json_webxr(
             rows,
             cols,
-            eval(video_width_str),
-            eval(video_height_str),
+            video_width,
+            video_height,
             tile_width,
             tile_height,
             output_dir,
         )
-    else:
-        # 生成Base低质量版本
-        cmder.infOut("Begin to crop tile ...")
-        generate_base_video(
-            video_dir + name,
-            base_width,
-            base_height,
-            output_dir + root_dir_name + "base.mp4",
-        )
-
-        # 创建存储tile视频的文件夹
-        tile_temp_dir = root_dir_name + "tile_temp/"
-        res = utils.create_dir(output_dir + tile_temp_dir)
-
-        if res:
-            cmder.infOut("Begin to crop tile ...")
-            for i in range(0, rows):
-                for j in range(0, cols):
-                    x = tile_width * i
-                    y = tile_height * j
-                    tile_name = "tile_" + str(i) + "_" + str(j) + ".mp4"
-                    output_path = output_dir + tile_temp_dir + tile_name
-                    crop(video_dir + name, tile_width, tile_height, x, y, output_path)
-        else:
-            cmder.errorOut("Create temp directory failed!")
-
-        transcode(output_root_dir, tile_width, tile_height)
-
-
-def generate_base_video(
-    video_path: str, base_width: int, base_height: int, output_path: str
-) -> None:
-    code, _ = cmder.runCmd(
-        f"ffmpeg -i {video_path} -vf scale={base_width}x{base_height} {output_path}"
+    cmder.infOut("Begin to crop tile ...")
+    generate_base_video(
+        video_dir + name,
+        output_dir + root_dir_name + "base.mp4",
     )
+
+    # 创建存储tile视频的文件夹
+    tile_temp_dir = root_dir_name + "tile_temp/"
+    res = utils.create_dir(output_dir + tile_temp_dir)
+
+    if res:
+        cmder.infOut("Begin to crop tile ...")
+        for i in range(0, rows):
+            for j in range(0, cols):
+                x = tile_width * i
+                y = tile_height * j
+                tile_name = "tile_" + str(i) + "_" + str(j) + ".mp4"
+                output_path = output_dir + tile_temp_dir + tile_name
+                crop(video_dir + name, tile_width, tile_height, x, y, output_path)
+    else:
+        cmder.errorOut("Create temp directory failed!")
+
+    transcode(output_root_dir)
+
+
+def generate_base_video(video_path: str, output_path: str) -> None:
+    code, _ = cmder.runCmd(f"ffmpeg -i {video_path} -crf 40 {output_path}")
     if code == -1:
         os._exit(-1)
 
 
 def crop_videos(
-    video_dir: str, output_dir: str, rows: int, cols: int, is_json: bool
+    video_dir: str, output_dir: str, rows: int, cols: int, is_webxr: bool
 ) -> None:
     video_names = get_video_list(workspace_dir)
     if len(video_names) == 0:
@@ -123,4 +113,4 @@ def crop_videos(
         ("There are " + str(len(video_names)) + " videos in this path")
     for name in video_names:
         cmder.infOut("Crop " + video_dir + name)
-        crop_video(video_dir, name, output_dir, rows, cols, is_json)
+        crop_video(video_dir, name, output_dir, rows, cols, is_webxr)
