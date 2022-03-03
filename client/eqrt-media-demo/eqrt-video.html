@@ -32,9 +32,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
     <title>Equirect Layer</title>
     <!-- Stereo layer dependency -->
-    <script src="../js/wglu/wglu-program.js"></script>
-    <script src="../js/wglu/wglu-url.js"></script>
-    <script src="../js/stereo-util.js"></script>
+    <script src="./js/wglu/wglu-program.js"></script>
+    <script src="./js/wglu/wglu-url.js"></script>
+    <script src="./js/stereo-util.js"></script>
 </head>
 
 <body>
@@ -42,30 +42,33 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <p>Click 'Enter VR' to see content</p>
 </main>
 <script type="module">
-	import {WebXRButton} from '../js/util/webxr-button.js';
-	import {Scene, WebXRView} from '../js/render/scenes/scene.js';
-	import {Renderer, createWebGLContext} from '../js/render/core/renderer.js';
-	import {QueryArgs} from '../js/util/query-args.js';
-	import {MenuSystem} from '../js/render/nodes/menu-system.js';
+	import {WebXRButton} from './js/util/webxr-button.js';
+	import {Scene, WebXRView} from './js/render/scenes/scene.js';
+	import {Renderer, createWebGLContext} from './js/render/core/renderer.js';
+	import {QueryArgs} from './js/util/query-args.js';
+	import {MenuSystem} from './js/render/nodes/menu-system.js';
 
 	// If requested, use the polyfill to provide support for mobile devices
 	// and devices which only support WebVR.
-	import WebXRPolyfill from '../js/third-party/webxr-polyfill/build/webxr-polyfill.module.js';
+	import WebXRPolyfill from './js/third-party/webxr-polyfill/build/webxr-polyfill.module.js';
 
 	if (QueryArgs.getBool('usePolyfill', true)) {
 		let polyfill = new WebXRPolyfill();
 	}
 
-	let angle = 0;
-	let radius = 0;
-	let fps = 0;
+	let baseVideo = null;
+	let baseVideoNeedRedraw = false;
+	let baseAngle = 0;
+	let baseRadius = 0;
+	let baseLayout = null;
+	let baseFPS = 0;
+	let baseUrl = null;
 	let baseWidth = 0;
 	let baseHeight = 0;
 	let tileWidth = 0;
 	let tileHeight = 0;
 	let rows = 0;
 	let cols = 0;
-	let layout = null;
 	let urls = null;
 
 	// XR globals.
@@ -84,24 +87,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	// Layer globals
 	let projLayer = null;
 	let eqrtLayer = null;
-	let eqrtVideoElement = null;
-	let eqrtVideoWidth = 0;
-	let eqrtVideoHeight = 0;
-	let eqrtVideoNeedsUpdate = false;
 
 	// Set up media control bar
 	let menuSystem = new MenuSystem();
-	menuSystem.createButton('../media/textures/backward-button.png', () => {
-		eqrtVideoElement.currentTime -= 15;
+	menuSystem.createButton('./media/textures/backward-button.png', () => {
+		baseVideo.currentTime -= 15;
 	});
 	menuSystem.createSwitch(
-		'../media/textures/pause-button.png', () => eqrtVideoElement.pause(),
-		'../media/textures/play-button.png', () => eqrtVideoElement.play()
+		'./media/textures/pause-button.png', () => baseVideo.pause(),
+		'./media/textures/play-button.png', () => baseVideo.play()
 	);
-	menuSystem.createButton('../media/textures/forward-button.png', () => {
-		eqrtVideoElement.currentTime += 15;
+	menuSystem.createButton('./media/textures/forward-button.png', () => {
+		baseVideo.currentTime += 15;
 	});
-	menuSystem.createButton('../media/textures/x-button.png', () => {
+	menuSystem.createButton('./media/textures/x-button.png', () => {
 		xrSession.end()
 	});
 	scene.addNode(menuSystem.getMenuBarNode());
@@ -114,21 +113,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 	async function initXR() {
 		let data = await myFetch("./source.json");
-		angle = data.angle;
-		radius = data.radius;
-		fps = data.fps;
+		baseAngle = data.angle;
+		baseRadius = data.radius;
+		baseFPS = data.fps;
 		rows = data.rows;
 		cols = data.cols;
+		baseUrl = data.url;
 		baseWidth = data.baseWidth;
 		baseHeight = data.baseHeight;
 		tileWidth = data.tileWidth;
 		tileHeight = data.tileHeight;
-		layout = data.layout;
+		baseLayout = data.layout;
 		urls = data.urls;
 
-		console.log(angle, radius, fps, layout);
+		console.log(baseAngle, baseRadius, baseFPS, baseLayout);
 		console.log(rows, cols, tileWidth, tileHeight);
-		console.log(urls);
+		console.log(baseUrl, urls);
 
 		xrButton = new WebXRButton({
 			onRequestSession: onRequestSession,
@@ -186,42 +186,34 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		xrFramebuffer = gl.createFramebuffer();
 		xrGLFactory = new XRWebGLBinding(session, gl);
 
-		let selected = document.getElementById("eqrtVideoSelect");
-		eqrtVideoElement = document.createElement('video');
-		eqrtVideoElement.loop = true;
-		eqrtVideoElement.crossOrigin = "anonymous";
-		eqrtVideoElement.preload = 'auto';
-		eqrtVideoElement.autoload = true;
-		eqrtVideoElement.src = selected.options[selected.selectedIndex].value;
-		eqrtVideoWidth = selected.options[selected.selectedIndex].getAttribute("data-video-width");
-		eqrtVideoHeight = selected.options[selected.selectedIndex].getAttribute("data-video-height");
-		let eqrtVideoAngle = selected.options[selected.selectedIndex].getAttribute("data-video-angle");
-		let eqrtVideoLayout = selected.options[selected.selectedIndex].getAttribute("data-video-layout");
-		let eqrtRadius = 10;
-		let eqrtVideoFPS = selected.options[selected.selectedIndex].getAttribute("data-video-fps");
+		baseVideo = document.createElement('video');
+		baseVideo.loop = true;
+		baseVideo.crossOrigin = "anonymous";
+		baseVideo.preload = 'auto';
+		baseVideo.autoload = true;
+		baseVideo.src = baseUrl;
+		baseVideo.play();
 
-
-		eqrtVideoElement.play();
 		setInterval(function () {
-			if (eqrtVideoElement.readyState >= eqrtVideoElement.HAVE_CURRENT_DATA) {
-				eqrtVideoNeedsUpdate = true;
+			if (baseVideo.readyState >= baseVideo.HAVE_CURRENT_DATA) {
+				baseVideoNeedRedraw = true;
 			}
-		}, 1000 / eqrtVideoFPS);
+		}, 1000 / baseFPS);
 
 		session.requestReferenceSpace('local').then((refSpace) => {
 			xrRefSpace = refSpace;
 			projLayer = xrGLFactory.createProjectionLayer({space: refSpace, stencil: false});
 			eqrtLayer = xrGLFactory.createEquirectLayer({
 				space: refSpace,
-				viewPixelWidth: eqrtVideoWidth / (eqrtVideoLayout === "stereo-left-right" ? 2 : 1),
-				viewPixelHeight: eqrtVideoHeight / (eqrtVideoLayout === "stereo-top-bottom" ? 2 : 1),
-				layout: eqrtVideoLayout,
+				viewPixelWidth: baseWidth / (baseLayout === "stereo-left-right" ? 2 : 1),
+				viewPixelHeight: baseHeight / (baseLayout === "stereo-top-bottom" ? 2 : 1),
+				layout: baseLayout,
 			});
 
-			eqrtLayer.centralHorizontalAngle = Math.PI * eqrtVideoAngle / 180;
+			eqrtLayer.centralHorizontalAngle = Math.PI * baseAngle / 180;
 			eqrtLayer.upperVerticalAngle = Math.PI / 2.0;
 			eqrtLayer.lowerVerticalAngle = -Math.PI / 2.0;
-			eqrtLayer.radius = eqrtRadius;
+			eqrtLayer.radius = baseRadius;
 			session.updateRenderState({layers: [eqrtLayer, projLayer]});
 
 			session.requestAnimationFrame(onXRFrame);
@@ -237,7 +229,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			xrButton.setSession(null);
 		}
 		xrSession = null;
-		eqrtVideoElement.pause();
+		baseVideo.pause();
 		gl = null;
 	}
 
@@ -245,15 +237,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		let pose = frame.getViewerPose(xrRefSpace);
 		xrSession.requestAnimationFrame(onXRFrame);
 
-		if (eqrtLayer && (eqrtVideoNeedsUpdate || eqrtLayer.needsRedraw)) {
-			eqrtVideoNeedsUpdate = false;
+		if (eqrtLayer && (baseVideoNeedRedraw || eqrtLayer.needsRedraw)) {
+			baseVideoNeedRedraw = false;
 			let glayer = xrGLFactory.getSubImage(eqrtLayer, frame);
 
 			// TEXTURE_CUBE_MAP expects the Y to be flipped for the faces and it already
 			// is flipped in our texture image.
 			gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 			gl.bindTexture(gl.TEXTURE_2D, glayer.colorTexture);
-			gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, eqrtVideoWidth, eqrtVideoHeight, gl.RGBA, gl.UNSIGNED_BYTE, eqrtVideoElement);
+			gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, baseWidth, baseHeight, gl.RGBA, gl.UNSIGNED_BYTE, baseVideo);
 			gl.bindTexture(gl.TEXTURE_2D, null);
 		}
 
