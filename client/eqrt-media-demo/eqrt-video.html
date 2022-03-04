@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <!--
 Copyright 2021 The Immersive Web Community Group
 
@@ -20,15 +20,27 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 -->
 <html>
-
 <head>
-    <meta charset='utf-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
-    <meta name='mobile-web-app-capable' content='yes'>
-    <meta name='apple-mobile-web-app-capable' content='yes'>
-    <link rel='icon' type='image/png' sizes='32x32' href='./media/favicon-32x32.png'>
-    <link rel='icon' type='image/png' sizes='96x96' href='./media/favicon-96x96.png'>
-    <link rel='stylesheet' href='./css/common.css'>
+    <meta charset="utf-8"/>
+    <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, user-scalable=no"
+    />
+    <meta name="mobile-web-app-capable" content="yes"/>
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <link
+            rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="./media/favicon-32x32.png"
+    />
+    <link
+            rel="icon"
+            type="image/png"
+            sizes="96x96"
+            href="./media/favicon-96x96.png"
+    />
+    <link rel="stylesheet" href="./css/common.css"/>
 
     <title>Equirect Layer</title>
     <!-- Stereo layer dependency -->
@@ -39,24 +51,32 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <script src="./js/dash/mediasync.js"></script>
     <script src="./js/dash/timingsrc-v2.js"></script>
     <script src="./js/dash/dash.all.min.js"></script>
+    <!-- Chart -->
+    <script src="./js/chart/chart.js"></script>
+    <script src="./js/chart/chart.utils.js"></script>
+    <script src="./js/chart/chartjs-plugin-datalabels.js"></script>
 </head>
 
 <body>
-<main style='text-align: center;'>
+<main style="text-align: center">
     <p>Click 'Enter VR' to see content</p>
+    <canvas id="chart" width="400" height="400"></canvas>
 </main>
 <script type="module">
-	import {WebXRButton} from './js/util/webxr-button.js';
-	import {Scene, WebXRView} from './js/render/scenes/scene.js';
-	import {Renderer, createWebGLContext} from './js/render/core/renderer.js';
-	import {QueryArgs} from './js/util/query-args.js';
-	import {MenuSystem} from './js/render/nodes/menu-system.js';
+	import {WebXRButton} from "./js/util/webxr-button.js";
+	import {Scene, WebXRView} from "./js/render/scenes/scene.js";
+	import {
+		Renderer,
+		createWebGLContext
+	} from "./js/render/core/renderer.js";
+	import {QueryArgs} from "./js/util/query-args.js";
+	import {MenuSystem} from "./js/render/nodes/menu-system.js";
+	import {mat4, vec3} from "./js/matrix/index.js";
+	import WebXRPolyfill from "./js/third-party/webxr-polyfill/build/webxr-polyfill.module.js";
 
-	// If requested, use the polyfill to provide support for mobile devices
-	// and devices which only support WebVR.
-	import WebXRPolyfill from './js/third-party/webxr-polyfill/build/webxr-polyfill.module.js';
+	const {XRWebGLBinding, XRRigidTransform} = window;
 
-	if (QueryArgs.getBool('usePolyfill', true)) {
+	if (QueryArgs.getBool("usePolyfill", true)) {
 		let polyfill = new WebXRPolyfill();
 	}
 
@@ -99,20 +119,34 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let projLayer = null;
 	let eqrtLayer = null;
 
+	let orientationXs = [];
+	let orientationYs = [];
+	let orientationZs = [];
+	let orientationWs = [];
+	let labels = [];
+
 	// Set up media control bar
 	let menuSystem = new MenuSystem();
-	menuSystem.createButton('./media/textures/backward-button.png', () => {
-		baseVideo.currentTime -= 15;
-	});
-	menuSystem.createSwitch(
-		'./media/textures/pause-button.png', () => baseVideo.pause(),
-		'./media/textures/play-button.png', () => baseVideo.play()
+	menuSystem.createButton(
+		"./media/textures/backward-button.png",
+		() => {
+			baseVideo.currentTime -= 15;
+		}
 	);
-	menuSystem.createButton('./media/textures/forward-button.png', () => {
-		baseVideo.currentTime += 15;
-	});
-	menuSystem.createButton('./media/textures/x-button.png', () => {
-		xrSession.end()
+	menuSystem.createSwitch(
+		"./media/textures/pause-button.png",
+		() => baseVideo.pause(),
+		"./media/textures/play-button.png",
+		() => baseVideo.play()
+	);
+	menuSystem.createButton(
+		"./media/textures/forward-button.png",
+		() => {
+			baseVideo.currentTime += 15;
+		}
+	);
+	menuSystem.createButton("./media/textures/x-button.png", () => {
+		xrSession.end();
 	});
 	scene.addNode(menuSystem.getMenuBarNode());
 
@@ -133,10 +167,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		video.autoplay = false;
 		video.muted = true;
 		video.allowsInlineMediaPlayBack = true;
-		video.setAttribute(
-			"webkit-playsinline",
-			"webkit-playsinline"
-		);
+		video.setAttribute("webkit-playsinline", "webkit-playsinline");
 		video.setAttribute("webkit-playsinline", true);
 		video.setAttribute("playsinline", true);
 		video.setAttribute("preload", "auto");
@@ -187,9 +218,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function loadTileVideos(sum) {
-        for (let i = 0; i < sum; i++) {
+		for (let i = 0; i < sum; i++) {
 			loadTileVideo(i, tileWidth, tileHeight);
-        }
+		}
 	}
 
 	function myFetch(source) {
@@ -224,20 +255,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			onRequestSession: onRequestSession,
 			onEndSession: onEndSession
 		});
-		document.querySelector('main').appendChild(xrButton.domElement);
+		document.querySelector("main").appendChild(xrButton.domElement);
 
 		if (navigator.xr) {
-			navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
-				xrButton.enabled = supported;
-			});
+			navigator.xr
+				.isSessionSupported("immersive-vr")
+				.then((supported) => {
+					xrButton.enabled = supported;
+				});
 		}
 	}
 
 	function onRequestSession() {
 		if (!xrSession) {
-			navigator.xr.requestSession('immersive-vr', {
-				requiredFeatures: ['layers'],
-			}).then(onSessionStarted);
+			navigator.xr
+				.requestSession("immersive-vr", {
+					requiredFeatures: ["layers"]
+				})
+				.then(onSessionStarted);
 		} else {
 			onEndSession();
 		}
@@ -247,16 +282,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		if (gl) {
 			return;
 		}
-		gl = createWebGLContext({xrCompatible: true, webgl2: true,});
+		gl = createWebGLContext({xrCompatible: true, webgl2: true});
 		document.body.appendChild(gl.canvas);
 		gl.clearColor(0.0, 0, 0, 0.0);
 
 		function onResize() {
-			gl.canvas.width = gl.canvas.clientWidth * window.devicePixelRatio;
-			gl.canvas.height = gl.canvas.clientHeight * window.devicePixelRatio;
+			gl.canvas.width =
+				gl.canvas.clientWidth * window.devicePixelRatio;
+			gl.canvas.height =
+				gl.canvas.clientHeight * window.devicePixelRatio;
 		}
 
-		window.addEventListener('resize', onResize);
+		window.addEventListener("resize", onResize);
 		onResize();
 
 		renderer = new Renderer(gl);
@@ -269,25 +306,29 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	function onSessionStarted(session) {
 		xrSession = session;
 		scene.inputRenderer.useProfileControllerMeshes(session);
-		session.addEventListener('end', onSessionEnded);
+		session.addEventListener("end", onSessionEnded);
 
 		initGL();
 
 		xrFramebuffer = gl.createFramebuffer();
 		xrGLFactory = new XRWebGLBinding(session, gl);
 
-		baseVideo = document.createElement('video');
+		baseVideo = document.createElement("video");
 		baseVideo.loop = true;
 		baseVideo.crossOrigin = "anonymous";
-		baseVideo.preload = 'auto';
+		baseVideo.preload = "auto";
 		baseVideo.autoload = true;
 		baseVideo.src = baseUrl;
-		baseVideo.addEventListener("canplaythrough", () => {
-			baseVideo.play();
-			timingSyncSrc = new TIMINGSRC.TimingObject({
-				position: baseVideo.currentTime,
-			});
-        }, false);
+		baseVideo.addEventListener(
+			"canplaythrough",
+			() => {
+				baseVideo.play();
+				timingSyncSrc = new TIMINGSRC.TimingObject({
+					position: baseVideo.currentTime
+				});
+			},
+			false
+		);
 
 		setInterval(function () {
 			if (baseVideo.readyState >= baseVideo.HAVE_CURRENT_DATA) {
@@ -295,21 +336,44 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			}
 		}, 1000 / baseFPS);
 
-		session.requestReferenceSpace('local').then((refSpace) => {
-			xrRefSpace = refSpace;
-			projLayer = xrGLFactory.createProjectionLayer({space: refSpace, stencil: false});
+		const viewerStartPosition = new vec3.fromValues(0, 0, -10);
+		const viewerStartOrientation = new vec3.fromValues(0, 0, 1.0);
+
+		const cubeOrientation = new vec3.create();
+		const cubeMatrix = new mat4.create();
+
+		mat4.fromTranslation(cubeMatrix, viewerStartPosition);
+		vec3.copy(cubeOrientation, viewerStartOrientation);
+
+		session.requestReferenceSpace("local").then((refSpace) => {
+			xrRefSpace = refSpace.getOffsetReferenceSpace(
+				new XRRigidTransform(
+					viewerStartPosition,
+					cubeOrientation
+				)
+			);
+			projLayer = xrGLFactory.createProjectionLayer({
+				space: refSpace,
+				stencil: false
+			});
 			eqrtLayer = xrGLFactory.createEquirectLayer({
 				space: refSpace,
-				viewPixelWidth: baseWidth / (baseLayout === "stereo-left-right" ? 2 : 1),
-				viewPixelHeight: baseHeight / (baseLayout === "stereo-top-bottom" ? 2 : 1),
-                centralHorizontalAngle: Math.PI * baseAngle / 180,
-                upperVerticalAngle: Math.PI / 2.0,
-                lowerVerticalAngle: -Math.PI / 2.0,
-                radius: baseRadius,
-				layout: baseLayout,
+				viewPixelWidth:
+					baseWidth /
+					(baseLayout === "stereo-left-right" ? 2 : 1),
+				viewPixelHeight:
+					baseHeight /
+					(baseLayout === "stereo-top-bottom" ? 2 : 1),
+				centralHorizontalAngle: (Math.PI * baseAngle) / 180,
+				upperVerticalAngle: Math.PI / 2.0,
+				lowerVerticalAngle: -Math.PI / 2.0,
+				radius: baseRadius,
+				layout: baseLayout
 			});
 
-			session.updateRenderState({layers: [eqrtLayer, projLayer]});
+			session.updateRenderState({
+				layers: [eqrtLayer, projLayer]
+			});
 
 			session.requestAnimationFrame(onXRFrame);
 		});
@@ -326,13 +390,97 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		xrSession = null;
 		baseVideo.pause();
 		gl = null;
+
+		var dataCount = orientationXs.length;
+		console.log(dataCount);
+		for (let i = 1; i <= dataCount; i++) {
+			labels.push("" + i);
+		}
+		let data = {
+			labels: labels,
+			datasets: [
+				{
+					label: "orientation.x",
+					backgroundColor: Samples.utils.color(0),
+					borderColor: Samples.utils.color(0),
+					data: orientationXs
+				},
+				{
+					label: "orientation.y",
+					backgroundColor: Samples.utils.color(1),
+					borderColor: Samples.utils.color(1),
+					data: orientationYs
+				},
+				{
+					label: "orientation.z",
+					backgroundColor: Samples.utils.color(2),
+					borderColor: Samples.utils.color(2),
+					data: orientationZs
+				},
+				{
+					label: "orientation.w",
+					backgroundColor: Samples.utils.color(3),
+					borderColor: Samples.utils.color(3),
+					data: orientationWs
+				}
+			]
+		};
+		const canvas = document.createElement("canvas");
+		document.querySelector("main").appendChild(canvas);
+		const ctx = canvas.getContext("2d");
+		const config = {
+			type: "line",
+			data: data,
+			options: {
+				plugins: {
+					datalabels: {
+						backgroundColor: function (context) {
+							return context.dataset.backgroundColor;
+						},
+						borderRadius: 4,
+						color: "white",
+						font: {
+							weight: "bold"
+						},
+						formatter: Math.round,
+						padding: 6
+					}
+				},
+
+				// Core options
+				aspectRatio: 5 / 3,
+				layout: {
+					padding: {
+						top: 32,
+						right: 16,
+						bottom: 16,
+						left: 8
+					}
+				},
+				elements: {
+					line: {
+						fill: false,
+						tension: 0.4
+					}
+				},
+				scales: {
+					y: {
+						stacked: true
+					}
+				}
+			}
+		};
+		const chart = new Chart(ctx, config);
 	}
 
 	function onXRFrame(time, frame) {
 		let pose = frame.getViewerPose(xrRefSpace);
 		xrSession.requestAnimationFrame(onXRFrame);
 
-		if (eqrtLayer && (baseVideoNeedRedraw || eqrtLayer.needsRedraw)) {
+		if (
+			eqrtLayer &&
+			(baseVideoNeedRedraw || eqrtLayer.needsRedraw)
+		) {
 			baseVideoNeedRedraw = false;
 			let glayer = xrGLFactory.getSubImage(eqrtLayer, frame);
 
@@ -340,15 +488,34 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			// is flipped in our texture image.
 			gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 			gl.bindTexture(gl.TEXTURE_2D, glayer.colorTexture);
-			gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, baseWidth, baseHeight, gl.RGBA, gl.UNSIGNED_BYTE, baseVideo);
+			gl.texSubImage2D(
+				gl.TEXTURE_2D,
+				0,
+				0,
+				0,
+				baseWidth,
+				baseHeight,
+				gl.RGBA,
+				gl.UNSIGNED_BYTE,
+				baseVideo
+			);
 			gl.bindTexture(gl.TEXTURE_2D, null);
 		}
 
 		if (pose) {
+			console.log(pose.transform.orientation);
+			orientationXs.push(pose.transform.orientation.x);
+			orientationYs.push(pose.transform.orientation.y);
+			orientationZs.push(pose.transform.orientation.z);
+			orientationWs.push(pose.transform.orientation.w);
+
 			gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
 			// We need to invalidate the color (and depth, just in case) here to avoid
 			// loading from the previously bound color texture. It will save some GPU time.
-			gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
+			gl.invalidateFramebuffer(gl.FRAMEBUFFER, [
+				gl.COLOR_ATTACHMENT0,
+				gl.DEPTH_ATTACHMENT
+			]);
 
 			scene.updateInputSources(frame, xrRefSpace);
 			menuSystem.processInput(frame, scene, xrRefSpace);
@@ -356,21 +523,34 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			let views = [];
 			for (let view of pose.views) {
 				let viewport = null;
-				let glLayer = xrGLFactory.getViewSubImage(projLayer, view);
+				let glLayer = xrGLFactory.getViewSubImage(
+					projLayer,
+					view
+				);
 				glLayer.framebuffer = xrFramebuffer;
 				viewport = glLayer.viewport;
 				gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
-				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, glLayer.colorTexture, 0);
-				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, glLayer.depthStencilTexture, 0);
+				gl.framebufferTexture2D(
+					gl.FRAMEBUFFER,
+					gl.COLOR_ATTACHMENT0,
+					gl.TEXTURE_2D,
+					glLayer.colorTexture,
+					0
+				);
+				gl.framebufferTexture2D(
+					gl.FRAMEBUFFER,
+					gl.DEPTH_ATTACHMENT,
+					gl.TEXTURE_2D,
+					glLayer.depthStencilTexture,
+					0
+				);
 				views.push(new WebXRView(view, glLayer, viewport));
 			}
 			scene.drawViewArray(views);
 		}
 		scene.endFrame();
 	}
-
 	initXR();
 </script>
 </body>
-
 </html>
