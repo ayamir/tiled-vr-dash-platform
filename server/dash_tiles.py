@@ -117,7 +117,7 @@ def generate_json_webxr(
         "fps": 30,
         "rows": rows,
         "cols": cols,
-        "url": url_prefix + "/base-fragmented.mp4",
+        "baseUrl": url_prefix + url_suffix,
         "baseWidth": base_width,
         "baseHeight": base_height,
         "tileWidth": tile_width,
