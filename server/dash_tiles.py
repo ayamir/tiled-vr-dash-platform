@@ -117,6 +117,7 @@ def generate_json_webxr(
         "fps": 30,
         "rows": rows,
         "cols": cols,
+        "baseUrl": url_prefix + url_suffix,
         "baseWidth": base_width,
         "baseHeight": base_height,
         "tileWidth": tile_width,
