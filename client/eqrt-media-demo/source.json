@@ -4,11 +4,12 @@
 	"fps": 30,
 	"rows": 6,
 	"cols": 4,
+	"baseUrl": "https://192.168.1.129/files/avc/output/stream.mpd",
 	"baseWidth": 4300,
 	"baseHeight": 4300,
 	"tileWidth": 716,
 	"tileHeight": 1076,
-	"layout": "stereo",
+	"layout": "stereo-top-bottom",
 	"urls": [
 		"https://192.168.1.129/files/avc/tile_0_0/output/stream.mpd",
 		"https://192.168.1.129/files/avc/tile_1_0/output/stream.mpd",

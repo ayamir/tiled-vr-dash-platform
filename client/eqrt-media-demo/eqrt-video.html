@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <!--
 Copyright 2021 The Immersive Web Community Group
 
@@ -20,53 +20,88 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 -->
 <html>
-
 <head>
-    <meta charset='utf-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
-    <meta name='mobile-web-app-capable' content='yes'>
-    <meta name='apple-mobile-web-app-capable' content='yes'>
-    <link rel='icon' type='image/png' sizes='32x32' href='../favicon-32x32.png'>
-    <link rel='icon' type='image/png' sizes='96x96' href='../favicon-96x96.png'>
-    <link rel='stylesheet' href='../css/common.css'>
+    <meta charset="utf-8"/>
+    <meta
+            content="width=device-width, initial-scale=1, user-scalable=no"
+            name="viewport"
+    />
+    <meta content="yes" name="mobile-web-app-capable"/>
+    <meta content="yes" name="apple-mobile-web-app-capable"/>
+    <link
+            href="./media/favicon-32x32.png"
+            rel="icon"
+            sizes="32x32"
+            type="image/png"
+    />
+    <link
+            href="./media/favicon-96x96.png"
+            rel="icon"
+            sizes="96x96"
+            type="image/png"
+    />
+    <link href="./css/common.css" rel="stylesheet"/>
 
     <title>Equirect Layer</title>
     <!-- Stereo layer dependency -->
-    <script src="../js/wglu/wglu-program.js"></script>
-    <script src="../js/wglu/wglu-url.js"></script>
-    <script src="../js/stereo-util.js"></script>
+    <script src="./js/wglu/wglu-program.js"></script>
+    <script src="./js/wglu/wglu-url.js"></script>
+    <script src="./js/stereo-util.js"></script>
+    <!-- Dash video dependency -->
+    <script src="./js/dash/mediasync.js"></script>
+    <script src="./js/dash/timingsrc-v2.js"></script>
+    <script src="./js/dash/dash.all.min.js"></script>
+    <!-- Chart -->
+    <script src="./js/chart/chart.js"></script>
+    <script src="./js/chart/chart.utils.js"></script>
+    <script src="./js/chart/chartjs-plugin-datalabels.js"></script>
 </head>
 
 <body>
-<main style='text-align: center;'>
+<main style="text-align: center">
     <p>Click 'Enter VR' to see content</p>
+    <canvas height="400" id="chart" width="400"></canvas>
 </main>
 <script type="module">
-	import {WebXRButton} from '../js/util/webxr-button.js';
-	import {Scene, WebXRView} from '../js/render/scenes/scene.js';
-	import {Renderer, createWebGLContext} from '../js/render/core/renderer.js';
-	import {QueryArgs} from '../js/util/query-args.js';
-	import {MenuSystem} from '../js/render/nodes/menu-system.js';
+	import {WebXRButton} from "./js/util/webxr-button.js";
+	import {Scene, WebXRView} from "./js/render/scenes/scene.js";
+	import {
+		Renderer,
+		createWebGLContext
+	} from "./js/render/core/renderer.js";
+	import {QueryArgs} from "./js/util/query-args.js";
+	import {MenuSystem} from "./js/render/nodes/menu-system.js";
+	import {mat4, vec3} from "./js/matrix/index.js";
+	import WebXRPolyfill from "./js/third-party/webxr-polyfill/build/webxr-polyfill.module.js";
 
-	// If requested, use the polyfill to provide support for mobile devices
-	// and devices which only support WebVR.
-	import WebXRPolyfill from '../js/third-party/webxr-polyfill/build/webxr-polyfill.module.js';
+	const {XRWebGLBinding, XRRigidTransform} = window;
 
-	if (QueryArgs.getBool('usePolyfill', true)) {
+	if (QueryArgs.getBool("usePolyfill", true)) {
 		let polyfill = new WebXRPolyfill();
 	}
 
-	let angle = 0;
-	let radius = 0;
-	let fps = 0;
+	let baseDash = null;
+	let baseVideo = null;
+	let baseVideoNeedRedraw = false;
+	let baseAngle = 0;
+	let baseRadius = 0;
+	let baseLayout = null;
+	let baseFPS = 0;
+	let baseUrl = null;
 	let baseWidth = 0;
 	let baseHeight = 0;
 	let tileWidth = 0;
 	let tileHeight = 0;
 	let rows = 0;
 	let cols = 0;
-	let layout = null;
 	let urls = null;
+
+	let isReady = [];
+	let isSelected = [];
+	let enhanceVideos = [];
+	let enhanceDash = [];
+	let videoMediaSync = [];
+	let timingSyncSrc = null;
 
 	// XR globals.
 	let xrButton = null;
@@ -84,27 +119,147 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	// Layer globals
 	let projLayer = null;
 	let eqrtLayer = null;
-	let eqrtVideoElement = null;
-	let eqrtVideoWidth = 0;
-	let eqrtVideoHeight = 0;
-	let eqrtVideoNeedsUpdate = false;
+
+	let labels = [];
+	/* x axis => vertical
+	   y axis => depth
+	   z axis => horizontal */
+	let orientationXs = [];
+	let orientationYs = [];
 
 	// Set up media control bar
 	let menuSystem = new MenuSystem();
-	menuSystem.createButton('../media/textures/backward-button.png', () => {
-		eqrtVideoElement.currentTime -= 15;
-	});
-	menuSystem.createSwitch(
-		'../media/textures/pause-button.png', () => eqrtVideoElement.pause(),
-		'../media/textures/play-button.png', () => eqrtVideoElement.play()
+	menuSystem.createButton(
+		"./media/textures/backward-button.png",
+		() => {
+			baseVideo.currentTime -= 15;
+		}
 	);
-	menuSystem.createButton('../media/textures/forward-button.png', () => {
-		eqrtVideoElement.currentTime += 15;
-	});
-	menuSystem.createButton('../media/textures/x-button.png', () => {
-		xrSession.end()
+	menuSystem.createSwitch(
+		"./media/textures/pause-button.png",
+		() => baseVideo.pause(),
+		"./media/textures/play-button.png",
+		() => baseVideo.play()
+	);
+	menuSystem.createButton(
+		"./media/textures/forward-button.png",
+		() => {
+			baseVideo.currentTime += 15;
+		}
+	);
+	menuSystem.createButton("./media/textures/x-button.png", () => {
+		onEndSession();
 	});
 	scene.addNode(menuSystem.getMenuBarNode());
+
+	function createEnhanceNode(sum) {
+		for (let i = 0; i < sum; i++) {
+			enhanceVideos.push(null);
+			enhanceDash.push(null);
+			videoMediaSync.push(null);
+		}
+	}
+
+	function initVideoNode(video, width, height) {
+		video.width = width;
+		video.height = height;
+		video.loop = true;
+		video.crossOrigin = "anonymous";
+		video.preload = "auto";
+		video.autoplay = false;
+		video.muted = true;
+		video.allowsInlineMediaPlayBack = true;
+		video.setAttribute("webkit-playsinline", "webkit-playsinline");
+		video.setAttribute("webkit-playsinline", true);
+		video.setAttribute("playsinline", true);
+		video.setAttribute("preload", "auto");
+		video.setAttribute("x-webkit-airplay", "allow");
+		video.setAttribute("x5-playsinline", true);
+		video.setAttribute("x5-video-player-type", "h5");
+		video.setAttribute("x5-video-player-fullscreen", false);
+		video.setAttribute("x5-video-orientation", "portrait");
+		video.setAttribute("style", "object-fit: fill");
+		video.setAttribute("loop", "loop");
+	}
+
+	async function loadTileVideo(id, width, height) {
+		if (enhanceVideos[id] === null) {
+			let video = document.createElement("video");
+			initVideoNode(video, width, height);
+			enhanceVideos[id] = video;
+			video.load();
+		}
+		let video = enhanceVideos[id];
+		if (enhanceDash[id] === null) {
+			let dash = dashjs.MediaPlayer().create();
+			dash.initialize(video, urls[id], true);
+			dash.updateSettings({
+				streaming: {
+					stableBufferTime: 3, // 一般质量下，稳定期的buffer大小
+					bufferTimeAtTopQuality: 5, // 如果使用的是最高质量，给予其更高的buffer长度
+					bufferTimeAtTopQualityLongForm: 20, // 当内容被判断为LongForm时，最高质量给予的buffer长度
+					longFormContentDurationThreshold: 200, // 多长被判断为long form内容
+					scheduleWhilePaused: false, // 当播放pause时，阻止后台下载
+					fastSwitchEnabled: true // 当视频的quality发生up时，清空之后的buffer，换取最新版本的内容
+				}
+			});
+			enhanceDash[id] = dash;
+		}
+		// if (timingSyncSrc !== null) {
+		// 	if (videoMediaSync[id] === null) {
+		// 		videoMediaSync[id] = new MCorp.mediaSync(
+		// 			enhanceVideos[id],
+		// 			timingSyncSrc
+		// 		);
+		// 	} else {
+		// 		videoMediaSync[id].pause(false);
+		// 	}
+		// }
+		isSelected[id] = true;
+
+		await video.play();
+		// video.currentTime = baseVideo.currentTime;
+		console.log("video played");
+	}
+
+	function loadTileVideos(sum) {
+		for (let i = 0; i < sum; i++) {
+			loadTileVideo(i, tileWidth, tileHeight);
+		}
+	}
+
+	async function loadBaseVideo() {
+		baseVideo = document.createElement("video");
+		baseVideo.loop = true;
+		baseVideo.crossOrigin = "anonymous";
+		baseVideo.preload = "auto";
+		baseVideo.autoload = true;
+
+		console.log(baseUrl);
+		console.log(baseVideo);
+		baseDash = dashjs.MediaPlayer().create();
+		baseDash.initialize(baseVideo, baseUrl, true);
+		baseDash.updateSettings({
+			fastSwitchEnabled: true, // 黑块率较高的清空下，基础流也是需要提升质量的
+			stableBufferTime: 30, // buffer尽可能的长
+			bufferTimeAtTopQuality: 60, // 最高质量不用担心rebuffer，所以可以尽可能的给较长的buffer
+			bufferTimeAtTopQualityLongForm: 120,
+			longFormContentDurationThreshold: 200
+		});
+		baseVideo.load();
+		console.log("baseVideo is loading");
+		await baseVideo.play();
+
+		timingSyncSrc = new TIMINGSRC.TimingObject({
+			position: baseVideo.currentTime
+		});
+
+		setInterval(function () {
+			if (baseVideo.readyState >= baseVideo.HAVE_CURRENT_DATA) {
+				baseVideoNeedRedraw = true;
+			}
+		}, 1000 / baseFPS);
+	}
 
 	function myFetch(source) {
 		return fetch(source).then((response) => {
@@ -114,59 +269,75 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 	async function initXR() {
 		let data = await myFetch("./source.json");
-		angle = data.angle;
-		radius = data.radius;
-		fps = data.fps;
+		baseAngle = data.angle;
+		baseRadius = data.radius;
+		baseFPS = data.fps;
 		rows = data.rows;
 		cols = data.cols;
+		baseUrl = data.baseUrl;
 		baseWidth = data.baseWidth;
 		baseHeight = data.baseHeight;
 		tileWidth = data.tileWidth;
 		tileHeight = data.tileHeight;
-		layout = data.layout;
+		baseLayout = data.layout;
 		urls = data.urls;
 
-		console.log(angle, radius, fps, layout);
+		console.log(baseAngle, baseRadius, baseFPS, baseLayout);
 		console.log(rows, cols, tileWidth, tileHeight);
-		console.log(urls);
+		console.log(baseUrl, urls);
+
+		let sum = rows * cols;
+		createEnhanceNode(sum);
 
 		xrButton = new WebXRButton({
 			onRequestSession: onRequestSession,
 			onEndSession: onEndSession
 		});
-		document.querySelector('main').appendChild(xrButton.domElement);
+		document.querySelector("main").appendChild(xrButton.domElement);
 
 		if (navigator.xr) {
-			navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
-				xrButton.enabled = supported;
-			});
+			navigator.xr
+				.isSessionSupported("immersive-vr")
+				.then((supported) => {
+					xrButton.enabled = supported;
+				});
 		}
 	}
 
 	function onRequestSession() {
 		if (!xrSession) {
-			navigator.xr.requestSession('immersive-vr', {
-				requiredFeatures: ['layers'],
-			}).then(onSessionStarted);
+			navigator.xr
+				.requestSession("immersive-vr", {
+					requiredFeatures: ["layers"]
+				})
+				.then(onSessionStarted);
 		} else {
 			onEndSession();
 		}
+	}
+
+	function onEndSession() {
+		xrSession.end();
+		baseVideo.pause();
+		gl = null;
 	}
 
 	function initGL() {
 		if (gl) {
 			return;
 		}
-		gl = createWebGLContext({xrCompatible: true, webgl2: true,});
+		gl = createWebGLContext({xrCompatible: true, webgl2: true});
 		document.body.appendChild(gl.canvas);
 		gl.clearColor(0.0, 0, 0, 0.0);
 
 		function onResize() {
-			gl.canvas.width = gl.canvas.clientWidth * window.devicePixelRatio;
-			gl.canvas.height = gl.canvas.clientHeight * window.devicePixelRatio;
+			gl.canvas.width =
+				gl.canvas.clientWidth * window.devicePixelRatio;
+			gl.canvas.height =
+				gl.canvas.clientHeight * window.devicePixelRatio;
 		}
 
-		window.addEventListener('resize', onResize);
+		window.addEventListener("resize", onResize);
 		onResize();
 
 		renderer = new Renderer(gl);
@@ -179,57 +350,128 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	function onSessionStarted(session) {
 		xrSession = session;
 		scene.inputRenderer.useProfileControllerMeshes(session);
-		session.addEventListener('end', onSessionEnded);
+		session.addEventListener("end", onSessionEnded);
 
 		initGL();
 
 		xrFramebuffer = gl.createFramebuffer();
 		xrGLFactory = new XRWebGLBinding(session, gl);
 
-		let selected = document.getElementById("eqrtVideoSelect");
-		eqrtVideoElement = document.createElement('video');
-		eqrtVideoElement.loop = true;
-		eqrtVideoElement.crossOrigin = "anonymous";
-		eqrtVideoElement.preload = 'auto';
-		eqrtVideoElement.autoload = true;
-		eqrtVideoElement.src = selected.options[selected.selectedIndex].value;
-		eqrtVideoWidth = selected.options[selected.selectedIndex].getAttribute("data-video-width");
-		eqrtVideoHeight = selected.options[selected.selectedIndex].getAttribute("data-video-height");
-		let eqrtVideoAngle = selected.options[selected.selectedIndex].getAttribute("data-video-angle");
-		let eqrtVideoLayout = selected.options[selected.selectedIndex].getAttribute("data-video-layout");
-		let eqrtRadius = 10;
-		let eqrtVideoFPS = selected.options[selected.selectedIndex].getAttribute("data-video-fps");
+		// Start from zero origin
+		const viewerStartPosition = new vec3.fromValues(0, 0, 0);
+		const viewerStartOrientation = new vec3.fromValues(0, 0, 0);
 
+		const cubeOrientation = new vec3.create();
+		const cubeMatrix = new mat4.create();
 
-		eqrtVideoElement.play();
-		setInterval(function () {
-			if (eqrtVideoElement.readyState >= eqrtVideoElement.HAVE_CURRENT_DATA) {
-				eqrtVideoNeedsUpdate = true;
-			}
-		}, 1000 / eqrtVideoFPS);
+		mat4.fromTranslation(cubeMatrix, viewerStartPosition);
+		vec3.copy(cubeOrientation, viewerStartOrientation);
 
-		session.requestReferenceSpace('local').then((refSpace) => {
-			xrRefSpace = refSpace;
-			projLayer = xrGLFactory.createProjectionLayer({space: refSpace, stencil: false});
-			eqrtLayer = xrGLFactory.createEquirectLayer({
-				space: refSpace,
-				viewPixelWidth: eqrtVideoWidth / (eqrtVideoLayout === "stereo-left-right" ? 2 : 1),
-				viewPixelHeight: eqrtVideoHeight / (eqrtVideoLayout === "stereo-top-bottom" ? 2 : 1),
-				layout: eqrtVideoLayout,
+		loadBaseVideo().then(() => {
+			session.requestReferenceSpace("local").then((refSpace) => {
+				xrRefSpace = refSpace.getOffsetReferenceSpace(
+					new XRRigidTransform(
+						viewerStartPosition,
+						cubeOrientation
+					)
+				);
+				projLayer = xrGLFactory.createProjectionLayer({
+					space: refSpace,
+					stencil: false
+				});
+				eqrtLayer = xrGLFactory.createEquirectLayer({
+					space: refSpace,
+					viewPixelWidth:
+						baseWidth /
+						(baseLayout === "stereo-left-right" ? 2 : 1),
+					viewPixelHeight:
+						baseHeight /
+						(baseLayout === "stereo-top-bottom" ? 2 : 1),
+					centralHorizontalAngle: (Math.PI * baseAngle) / 180,
+					upperVerticalAngle: Math.PI / 2.0,
+					lowerVerticalAngle: -Math.PI / 2.0,
+					radius: baseRadius,
+					layout: baseLayout
+				});
+
+				session.updateRenderState({
+					layers: [eqrtLayer, projLayer]
+				});
+
+				session.requestAnimationFrame(onXRFrame);
 			});
-
-			eqrtLayer.centralHorizontalAngle = Math.PI * eqrtVideoAngle / 180;
-			eqrtLayer.upperVerticalAngle = Math.PI / 2.0;
-			eqrtLayer.lowerVerticalAngle = -Math.PI / 2.0;
-			eqrtLayer.radius = eqrtRadius;
-			session.updateRenderState({layers: [eqrtLayer, projLayer]});
-
-			session.requestAnimationFrame(onXRFrame);
-		});
+        });
 	}
 
-	function onEndSession() {
-		xrSession.end();
+	function drawChart() {
+		var dataCount = orientationXs.length;
+		console.log(dataCount);
+		for (let i = 1; i <= dataCount; i++) {
+			labels.push("" + i);
+		}
+		let data = {
+			labels: labels,
+			datasets: [
+				{
+					label: "orientation.x",
+					backgroundColor: Samples.utils.color(0),
+					borderColor: Samples.utils.color(0),
+					data: orientationXs
+				},
+				{
+					label: "orientation.y",
+					backgroundColor: Samples.utils.color(1),
+					borderColor: Samples.utils.color(1),
+					data: orientationYs
+				},
+			]
+		};
+		const canvas = document.createElement("canvas");
+		document.querySelector("main").appendChild(canvas);
+		const ctx = canvas.getContext("2d");
+		const config = {
+			type: "line",
+			data: data,
+			options: {
+				plugins: {
+					datalabels: {
+						backgroundColor: function (context) {
+							return context.dataset.backgroundColor;
+						},
+						borderRadius: 4,
+						color: "white",
+						font: {
+							weight: "bold"
+						},
+						formatter: Math.round,
+						padding: 6
+					}
+				},
+
+				// Core options
+				aspectRatio: 5 / 3,
+				layout: {
+					padding: {
+						top: 32,
+						right: 16,
+						bottom: 16,
+						left: 8
+					}
+				},
+				elements: {
+					line: {
+						fill: false,
+						tension: 0.4
+					}
+				},
+				scales: {
+					y: {
+						stacked: true
+					}
+				}
+			}
+		};
+		const chart = new Chart(ctx, config);
 	}
 
 	function onSessionEnded(event) {
@@ -237,31 +479,55 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			xrButton.setSession(null);
 		}
 		xrSession = null;
-		eqrtVideoElement.pause();
+		baseVideo.pause();
 		gl = null;
+
+		drawChart();
+
+		console.log("MaxX=" + Math.max(...orientationXs) + ", MinX=" + Math.min(...orientationXs));
+		console.log("MaxY=" + Math.max(...orientationYs) + ", MinY=" + Math.min(...orientationYs));
 	}
 
 	function onXRFrame(time, frame) {
 		let pose = frame.getViewerPose(xrRefSpace);
 		xrSession.requestAnimationFrame(onXRFrame);
 
-		if (eqrtLayer && (eqrtVideoNeedsUpdate || eqrtLayer.needsRedraw)) {
-			eqrtVideoNeedsUpdate = false;
+		if (eqrtLayer && (baseVideoNeedRedraw || eqrtLayer.needsRedraw)) {
+			baseVideoNeedRedraw = false;
 			let glayer = xrGLFactory.getSubImage(eqrtLayer, frame);
 
 			// TEXTURE_CUBE_MAP expects the Y to be flipped for the faces and it already
 			// is flipped in our texture image.
 			gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 			gl.bindTexture(gl.TEXTURE_2D, glayer.colorTexture);
-			gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, eqrtVideoWidth, eqrtVideoHeight, gl.RGBA, gl.UNSIGNED_BYTE, eqrtVideoElement);
+			gl.texSubImage2D(
+				gl.TEXTURE_2D,
+				0,
+				0,
+				0,
+				baseWidth,
+				baseHeight,
+				gl.RGBA,
+				gl.UNSIGNED_BYTE,
+				baseVideo
+			);
 			gl.bindTexture(gl.TEXTURE_2D, null);
 		}
 
 		if (pose) {
+			let x = pose.transform.orientation.x;
+			let y = pose.transform.orientation.y;
+			// For draw trace graph
+			orientationXs.push(x);
+			orientationYs.push(y);
+
 			gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
 			// We need to invalidate the color (and depth, just in case) here to avoid
 			// loading from the previously bound color texture. It will save some GPU time.
-			gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
+			gl.invalidateFramebuffer(gl.FRAMEBUFFER, [
+				gl.COLOR_ATTACHMENT0,
+				gl.DEPTH_ATTACHMENT
+			]);
 
 			scene.updateInputSources(frame, xrRefSpace);
 			menuSystem.processInput(frame, scene, xrRefSpace);
@@ -273,8 +539,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 				glLayer.framebuffer = xrFramebuffer;
 				viewport = glLayer.viewport;
 				gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
-				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, glLayer.colorTexture, 0);
-				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, glLayer.depthStencilTexture, 0);
+				gl.framebufferTexture2D(
+					gl.FRAMEBUFFER,
+					gl.COLOR_ATTACHMENT0,
+					gl.TEXTURE_2D,
+					glLayer.colorTexture,
+					0
+				);
+				gl.framebufferTexture2D(
+					gl.FRAMEBUFFER,
+					gl.DEPTH_ATTACHMENT,
+					gl.TEXTURE_2D,
+					glLayer.depthStencilTexture,
+					0
+				);
 				views.push(new WebXRView(view, glLayer, viewport));
 			}
 			scene.drawViewArray(views);
@@ -285,5 +563,4 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	initXR();
 </script>
 </body>
-
 </html>
