@@ -152,8 +152,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	});
 	scene.addNode(menuSystem.getMenuBarNode());
 
+	function myFetch(source) {
+		return fetch(source).then((response) => {
+			return response.json();
+		});
+	}
+
 	function createEnhanceNode(sum) {
 		for (let i = 0; i < sum; i++) {
+			isReady.push(false);
+			isSelected.push(false);
 			enhanceVideos.push(null);
 			enhanceDash.push(null);
 			videoMediaSync.push(null);
@@ -187,6 +195,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			let video = document.createElement("video");
 			initVideoNode(video, width, height);
 			enhanceVideos[id] = video;
+			video.oncanplay = () => {
+				isReady[id] = true;
+            }
 			video.load();
 		}
 		let video = enhanceVideos[id];
@@ -259,12 +270,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 				baseVideoNeedRedraw = true;
 			}
 		}, 1000 / baseFPS);
-	}
-
-	function myFetch(source) {
-		return fetch(source).then((response) => {
-			return response.json();
-		});
 	}
 
 	async function initXR() {
