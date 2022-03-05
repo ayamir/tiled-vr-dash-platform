@@ -23,24 +23,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 <head>
     <meta charset="utf-8"/>
     <meta
-            name="viewport"
             content="width=device-width, initial-scale=1, user-scalable=no"
+            name="viewport"
     />
-    <meta name="mobile-web-app-capable" content="yes"/>
-    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta content="yes" name="mobile-web-app-capable"/>
+    <meta content="yes" name="apple-mobile-web-app-capable"/>
     <link
-            rel="icon"
-            type="image/png"
-            sizes="32x32"
             href="./media/favicon-32x32.png"
+            rel="icon"
+            sizes="32x32"
+            type="image/png"
     />
     <link
-            rel="icon"
-            type="image/png"
-            sizes="96x96"
             href="./media/favicon-96x96.png"
+            rel="icon"
+            sizes="96x96"
+            type="image/png"
     />
-    <link rel="stylesheet" href="./css/common.css"/>
+    <link href="./css/common.css" rel="stylesheet"/>
 
     <title>Equirect Layer</title>
     <!-- Stereo layer dependency -->
@@ -60,7 +60,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 <body>
 <main style="text-align: center">
     <p>Click 'Enter VR' to see content</p>
-    <canvas id="chart" width="400" height="400"></canvas>
+    <canvas height="400" id="chart" width="400"></canvas>
 </main>
 <script type="module">
 	import {WebXRButton} from "./js/util/webxr-button.js";
@@ -80,6 +80,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		let polyfill = new WebXRPolyfill();
 	}
 
+	let baseDash = null;
 	let baseVideo = null;
 	let baseVideoNeedRedraw = false;
 	let baseAngle = 0;
@@ -119,11 +120,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let projLayer = null;
 	let eqrtLayer = null;
 
+	let labels = [];
+	/* x axis => vertical
+	   y axis => depth
+	   z axis => horizontal */
 	let orientationXs = [];
 	let orientationYs = [];
-	let orientationZs = [];
-	let orientationWs = [];
-	let labels = [];
 
 	// Set up media control bar
 	let menuSystem = new MenuSystem();
@@ -146,7 +148,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		}
 	);
 	menuSystem.createButton("./media/textures/x-button.png", () => {
-		xrSession.end();
+		onEndSession();
 	});
 	scene.addNode(menuSystem.getMenuBarNode());
 
@@ -203,24 +205,60 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			});
 			enhanceDash[id] = dash;
 		}
-		if (videoMediaSync[id] === null) {
-			videoMediaSync[id] = new MCorp.mediaSync(
-				enhanceVideos[id],
-				timingSyncSrc
-			);
-		} else {
-			videoMediaSync[id].pause(false);
-		}
+		// if (timingSyncSrc !== null) {
+		// 	if (videoMediaSync[id] === null) {
+		// 		videoMediaSync[id] = new MCorp.mediaSync(
+		// 			enhanceVideos[id],
+		// 			timingSyncSrc
+		// 		);
+		// 	} else {
+		// 		videoMediaSync[id].pause(false);
+		// 	}
+		// }
 		isSelected[id] = true;
 
-		video.currentTime = baseVideo.currentTime;
 		await video.play();
+		// video.currentTime = baseVideo.currentTime;
+		console.log("video played");
 	}
 
 	function loadTileVideos(sum) {
 		for (let i = 0; i < sum; i++) {
 			loadTileVideo(i, tileWidth, tileHeight);
 		}
+	}
+
+	async function loadBaseVideo() {
+		baseVideo = document.createElement("video");
+		baseVideo.loop = true;
+		baseVideo.crossOrigin = "anonymous";
+		baseVideo.preload = "auto";
+		baseVideo.autoload = true;
+
+		console.log(baseUrl);
+		console.log(baseVideo);
+		baseDash = dashjs.MediaPlayer().create();
+		baseDash.initialize(baseVideo, baseUrl, true);
+		baseDash.updateSettings({
+			fastSwitchEnabled: true, // 黑块率较高的清空下，基础流也是需要提升质量的
+			stableBufferTime: 30, // buffer尽可能的长
+			bufferTimeAtTopQuality: 60, // 最高质量不用担心rebuffer，所以可以尽可能的给较长的buffer
+			bufferTimeAtTopQualityLongForm: 120,
+			longFormContentDurationThreshold: 200
+		});
+		baseVideo.load();
+		console.log("baseVideo is loading");
+		await baseVideo.play();
+
+		timingSyncSrc = new TIMINGSRC.TimingObject({
+			position: baseVideo.currentTime
+		});
+
+		setInterval(function () {
+			if (baseVideo.readyState >= baseVideo.HAVE_CURRENT_DATA) {
+				baseVideoNeedRedraw = true;
+			}
+		}, 1000 / baseFPS);
 	}
 
 	function myFetch(source) {
@@ -236,7 +274,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		baseFPS = data.fps;
 		rows = data.rows;
 		cols = data.cols;
-		baseUrl = data.url;
+		baseUrl = data.baseUrl;
 		baseWidth = data.baseWidth;
 		baseHeight = data.baseHeight;
 		tileWidth = data.tileWidth;
@@ -278,6 +316,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		}
 	}
 
+	function onEndSession() {
+		xrSession.end();
+		baseVideo.pause();
+		gl = null;
+	}
+
 	function initGL() {
 		if (gl) {
 			return;
@@ -313,31 +357,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		xrFramebuffer = gl.createFramebuffer();
 		xrGLFactory = new XRWebGLBinding(session, gl);
 
-		baseVideo = document.createElement("video");
-		baseVideo.loop = true;
-		baseVideo.crossOrigin = "anonymous";
-		baseVideo.preload = "auto";
-		baseVideo.autoload = true;
-		baseVideo.src = baseUrl;
-		baseVideo.addEventListener(
-			"canplaythrough",
-			() => {
-				baseVideo.play();
-				timingSyncSrc = new TIMINGSRC.TimingObject({
-					position: baseVideo.currentTime
-				});
-			},
-			false
-		);
-
-		setInterval(function () {
-			if (baseVideo.readyState >= baseVideo.HAVE_CURRENT_DATA) {
-				baseVideoNeedRedraw = true;
-			}
-		}, 1000 / baseFPS);
-
-		const viewerStartPosition = new vec3.fromValues(0, 0, -10);
-		const viewerStartOrientation = new vec3.fromValues(0, 0, 1.0);
+		// Start from zero origin
+		const viewerStartPosition = new vec3.fromValues(0, 0, 0);
+		const viewerStartOrientation = new vec3.fromValues(0, 0, 0);
 
 		const cubeOrientation = new vec3.create();
 		const cubeMatrix = new mat4.create();
@@ -345,52 +367,43 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		mat4.fromTranslation(cubeMatrix, viewerStartPosition);
 		vec3.copy(cubeOrientation, viewerStartOrientation);
 
-		session.requestReferenceSpace("local").then((refSpace) => {
-			xrRefSpace = refSpace.getOffsetReferenceSpace(
-				new XRRigidTransform(
-					viewerStartPosition,
-					cubeOrientation
-				)
-			);
-			projLayer = xrGLFactory.createProjectionLayer({
-				space: refSpace,
-				stencil: false
-			});
-			eqrtLayer = xrGLFactory.createEquirectLayer({
-				space: refSpace,
-				viewPixelWidth:
-					baseWidth /
-					(baseLayout === "stereo-left-right" ? 2 : 1),
-				viewPixelHeight:
-					baseHeight /
-					(baseLayout === "stereo-top-bottom" ? 2 : 1),
-				centralHorizontalAngle: (Math.PI * baseAngle) / 180,
-				upperVerticalAngle: Math.PI / 2.0,
-				lowerVerticalAngle: -Math.PI / 2.0,
-				radius: baseRadius,
-				layout: baseLayout
-			});
+		loadBaseVideo().then(() => {
+			session.requestReferenceSpace("local").then((refSpace) => {
+				xrRefSpace = refSpace.getOffsetReferenceSpace(
+					new XRRigidTransform(
+						viewerStartPosition,
+						cubeOrientation
+					)
+				);
+				projLayer = xrGLFactory.createProjectionLayer({
+					space: refSpace,
+					stencil: false
+				});
+				eqrtLayer = xrGLFactory.createEquirectLayer({
+					space: refSpace,
+					viewPixelWidth:
+						baseWidth /
+						(baseLayout === "stereo-left-right" ? 2 : 1),
+					viewPixelHeight:
+						baseHeight /
+						(baseLayout === "stereo-top-bottom" ? 2 : 1),
+					centralHorizontalAngle: (Math.PI * baseAngle) / 180,
+					upperVerticalAngle: Math.PI / 2.0,
+					lowerVerticalAngle: -Math.PI / 2.0,
+					radius: baseRadius,
+					layout: baseLayout
+				});
 
-			session.updateRenderState({
-				layers: [eqrtLayer, projLayer]
-			});
+				session.updateRenderState({
+					layers: [eqrtLayer, projLayer]
+				});
 
-			session.requestAnimationFrame(onXRFrame);
-		});
+				session.requestAnimationFrame(onXRFrame);
+			});
+        });
 	}
 
-	function onEndSession() {
-		xrSession.end();
-	}
-
-	function onSessionEnded(event) {
-		if (event.session.isImmersive) {
-			xrButton.setSession(null);
-		}
-		xrSession = null;
-		baseVideo.pause();
-		gl = null;
-
+	function drawChart() {
 		var dataCount = orientationXs.length;
 		console.log(dataCount);
 		for (let i = 1; i <= dataCount; i++) {
@@ -411,18 +424,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 					borderColor: Samples.utils.color(1),
 					data: orientationYs
 				},
-				{
-					label: "orientation.z",
-					backgroundColor: Samples.utils.color(2),
-					borderColor: Samples.utils.color(2),
-					data: orientationZs
-				},
-				{
-					label: "orientation.w",
-					backgroundColor: Samples.utils.color(3),
-					borderColor: Samples.utils.color(3),
-					data: orientationWs
-				}
 			]
 		};
 		const canvas = document.createElement("canvas");
@@ -473,14 +474,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		const chart = new Chart(ctx, config);
 	}
 
+	function onSessionEnded(event) {
+		if (event.session.isImmersive) {
+			xrButton.setSession(null);
+		}
+		xrSession = null;
+		baseVideo.pause();
+		gl = null;
+
+		drawChart();
+
+		console.log("MaxX=" + Math.max(...orientationXs) + ", MinX=" + Math.min(...orientationXs));
+		console.log("MaxY=" + Math.max(...orientationYs) + ", MinY=" + Math.min(...orientationYs));
+	}
+
 	function onXRFrame(time, frame) {
 		let pose = frame.getViewerPose(xrRefSpace);
 		xrSession.requestAnimationFrame(onXRFrame);
 
-		if (
-			eqrtLayer &&
-			(baseVideoNeedRedraw || eqrtLayer.needsRedraw)
-		) {
+		if (eqrtLayer && (baseVideoNeedRedraw || eqrtLayer.needsRedraw)) {
 			baseVideoNeedRedraw = false;
 			let glayer = xrGLFactory.getSubImage(eqrtLayer, frame);
 
@@ -503,11 +515,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		}
 
 		if (pose) {
-			console.log(pose.transform.orientation);
-			orientationXs.push(pose.transform.orientation.x);
-			orientationYs.push(pose.transform.orientation.y);
-			orientationZs.push(pose.transform.orientation.z);
-			orientationWs.push(pose.transform.orientation.w);
+			let x = pose.transform.orientation.x;
+			let y = pose.transform.orientation.y;
+			// For draw trace graph
+			orientationXs.push(x);
+			orientationYs.push(y);
 
 			gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
 			// We need to invalidate the color (and depth, just in case) here to avoid
@@ -523,10 +535,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			let views = [];
 			for (let view of pose.views) {
 				let viewport = null;
-				let glLayer = xrGLFactory.getViewSubImage(
-					projLayer,
-					view
-				);
+				let glLayer = xrGLFactory.getViewSubImage(projLayer, view);
 				glLayer.framebuffer = xrFramebuffer;
 				viewport = glLayer.viewport;
 				gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
@@ -550,6 +559,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		}
 		scene.endFrame();
 	}
+
 	initXR();
 </script>
 </body>

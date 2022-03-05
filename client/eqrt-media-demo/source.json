@@ -4,7 +4,7 @@
 	"fps": 30,
 	"rows": 6,
 	"cols": 4,
-	"url": "https://192.168.1.129/files/avc/base-fragmented.mp4",
+	"baseUrl": "https://192.168.1.129/files/avc/output/stream.mpd",
 	"baseWidth": 4300,
 	"baseHeight": 4300,
 	"tileWidth": 716,
