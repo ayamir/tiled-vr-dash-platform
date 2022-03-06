@@ -216,20 +216,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			});
 			enhanceDash[id] = dash;
 		}
-		// if (timingSyncSrc !== null) {
-		// 	if (videoMediaSync[id] === null) {
-		// 		videoMediaSync[id] = new MCorp.mediaSync(
-		// 			enhanceVideos[id],
-		// 			timingSyncSrc
-		// 		);
-		// 	} else {
-		// 		videoMediaSync[id].pause(false);
-		// 	}
-		// }
+		if (timingSyncSrc !== null) {
+			if (videoMediaSync[id] === null) {
+				videoMediaSync[id] = new MCorp.mediaSync(
+					enhanceVideos[id],
+					timingSyncSrc
+				);
+			} else {
+				videoMediaSync[id].pause(false);
+			}
+		}
 		isSelected[id] = true;
 
 		await video.play();
-		// video.currentTime = baseVideo.currentTime;
+		video.currentTime = baseVideo.currentTime;
 		console.log("video played");
 	}
 
@@ -322,7 +322,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function onEndSession() {
-		xrSession.end();
+		if (xrSession) {
+			xrSession.end();
+        }
 		baseVideo.pause();
 		gl = null;
 	}
@@ -379,7 +381,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 						viewerStartPosition,
 						cubeOrientation
 					)
-				);
+				)
 				projLayer = xrGLFactory.createProjectionLayer({
 					space: refSpace,
 					stencil: false
@@ -409,8 +411,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function drawChart() {
-		var dataCount = orientationXs.length;
-		console.log(dataCount);
+		let dataCount = orientationXs.length;
 		for (let i = 1; i <= dataCount; i++) {
 			labels.push("" + i);
 		}

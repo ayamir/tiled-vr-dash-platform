@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebXR with THREE.js</title>
+</head>
+<body>
+<main style="text-align: center">
+    <video id="baseVideo"></video>
+</main>
+<script src="./js/three.js"></script>
+<script src="./js/dash/dash.all.min.js"></script>
+<script src="./js/dash/mediasync.js"></script>
+<script src="./js/dash/timingsrc-v2.js"></script>
+<script type="module">
+	import {WebXRButton} from "./js/util/webxr-button.js";
+	import {mat4, vec3} from "./js/matrix/index.js";
+	import {MenuSystem} from "./js/render/nodes/menu-system.js";
+
+	const {XRRigidTransform} = window;
+
+	let radius = 0;
+	let rows = 0;
+	let cols = 0;
+	let baseUrl = null;
+	let urls = null;
+	let baseVideo = null;
+	let baseDash = null;
+	let baseWidth = 0;
+	let baseHeight = 0;
+	let tileWidth = 0;
+	let tileHeight = 0;
+
+	let isReady = [];
+	let isSelected = [];
+	let enhanceVideos = [];
+	let enhanceDash = [];
+	let videoMediaSync = [];
+	let timingSyncSrc = null;
+
+	let fov = 100;
+	let width = 0;
+	let height = 0;
+	let aspect = 1;
+	let near = 0.1;
+	let far = 1000;
+
+	let position = {
+		x: 0, y: 0, z: 10
+	};
+	let target = {
+		x: 0, y: 0, z: 0
+	}
+
+	let ctx = null;
+	let canvas = null;
+	let container = null;
+	let xrButton = null;
+	let xrSession = null;
+	let xrRefSpace = null;
+	let preferredXRSpace = "local";
+	let preferredFeature = "local";
+
+	let scene = null;
+	let camera = null;
+	let renderer = null;
+	let texture = null;
+	let geometry1 = null;
+	let geometry2 = null;
+	let material1 = null;
+	let material2 = null;
+	let mesh1 = null;
+	let mesh2 = null;
+
+	function myFetch(source) {
+		return fetch(source).then((response) => {
+			return response.json();
+		});
+	}
+
+	function onResize() {
+		width = window.innerWidth;
+		height = window.innerHeight;
+		aspect = width / height;
+
+		if (renderer) {
+			renderer.setSize(width, height);
+		}
+		if (camera) {
+			camera.aspect = aspect;
+			camera.updateProjectionMatrix();
+		}
+	}
+
+	async function initXR() {
+		onResize();
+		window.addEventListener("resize", onResize);
+
+		let data = await myFetch("./source.json");
+		radius = data.radius;
+		rows = data.rows;
+		cols = data.cols;
+		urls = data.urls;
+		baseUrl = data.baseUrl;
+		baseWidth = data.baseWidth;
+		baseHeight = data.baseHeight;
+		tileWidth = data.tileWidth;
+		tileHeight = data.tileHeight;
+
+		xrButton = new WebXRButton({
+			onRequestSession: onRequestSession,
+			onEndSession: onEndSession,
+		})
+		container = document.querySelector("main");
+		container.appendChild(xrButton.domElement);
+
+		if (navigator.xr) {
+			navigator.xr.isSessionSupported("immersive-vr").then((supported) => {
+				xrButton.enabled = supported;
+			});
+		}
+	}
+
+	function onEndSession() {
+		if (xrSession) {
+			xrSession.end();
+		}
+	}
+
+	function onRequestSession() {
+		if (!xrSession) {
+			navigator.xr.requestSession("immersive-vr", {
+				requiredFeatures: [preferredFeature],
+			}).then(onSessionStarted);
+		} else {
+			onEndSession();
+		}
+	}
+
+	async function onSessionStarted(session) {
+		xrSession = session;
+		session.addEventListener("end", onEndSession);
+
+		// init baseVideo
+		baseVideo = document.getElementById("baseVideo");
+		baseDash = dashjs.MediaPlayer().create();
+		baseDash.initialize(baseVideo, baseUrl, true);
+		baseDash.updateSettings({
+			fastSwitchEnabled: true, // 黑块率较高的清空下，基础流也是需要提升质量的
+			stableBufferTime: 30, // buffer尽可能的长
+			bufferTimeAtTopQuality: 60, // 最高质量不用担心rebuffer，所以可以尽可能的给较长的buffer
+			bufferTimeAtTopQualityLongForm: 120,
+			longFormContentDurationThreshold: 200
+		});
+		baseVideo.load();
+		baseVideo.play();
+		timingSyncSrc = new TIMINGSRC.TimingObject({
+			position: baseVideo.currentTime
+		});
+
+		// init enhanced layers
+		for (let i = 0; i < rows * cols; i++) {
+			isReady.push(false);
+			isSelected.push(false);
+			enhanceVideos.push(null);
+			enhanceDash.push(null);
+			videoMediaSync.push(null);
+		}
+
+		// init canvas
+		canvas = document.createElement("canvas");
+		canvas.width = baseWidth;
+		canvas.height = baseHeight;
+		canvas.style.width = baseWidth / 2 + "px";
+		canvas.style.height = baseHeight / 2 + "px";
+		container.appendChild(canvas);
+
+		// init ctx
+		ctx = canvas.getContext("2d");
+		ctx.scale(2, 2);
+		ctx.imageSmoothingQuality = "high";
+
+		// init renderer
+		renderer = new THREE.WebGLRenderer({antialias: true});
+		renderer.setPixelRatio(window.devicePixelRatio);
+		renderer.setSize(width, height);
+		renderer.xr.enabled = true;
+		renderer.sortObjects = false;
+		renderer.autoClear = false;
+		container.appendChild(renderer.domElement);
+
+		// init camera
+		camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+		camera.position.set(position.x, position.y, position.z);
+		camera.target = new THREE.Vector3(target.x, target.y, target.z);
+
+		// init scene
+		scene = new THREE.Scene();
+		scene.add(camera);
+
+		// init texture
+		texture = new THREE.CanvasTexture(canvas);
+		texture.needsUpdate = true;
+
+		// init geometry
+		geometry1 = new THREE.SphereBufferGeometry(radius, 80, 40);
+		geometry2 = new THREE.SphereBufferGeometry(radius, 80, 40);
+		geometry1.scale(-1, 1, 1);
+		geometry2.scale(-1, 1, 1);
+		const uvs1 = geometry1.attributes.uv.array;
+		for (let i = 0; i < uvs1.length; i += 2) {
+			uvs1[i] *= 0.5;
+		}
+		const uvs2 = geometry2.attributes.uv.array;
+		for (let i = 0; i < uvs2.length; i += 2) {
+			uvs2[i] *= 0.5;
+			uvs2[i] += 0.5;
+		}
+
+		// init mesh
+		material1 = new THREE.MeshBasicMaterial({map: texture});
+		mesh1 = new THREE.Mesh(geometry1, material1);
+		mesh1.rotation.y = -Math.PI / 2;
+		mesh1.layers.set(1);
+		scene.add(mesh1);
+
+		material2 = new THREE.MeshBasicMaterial({map: texture});
+		mesh2 = new THREE.Mesh(geometry2, material2);
+		mesh2.rotation.y = -Math.PI / 2;
+		mesh2.layers.set(2);
+		scene.add(mesh2);
+
+		// Start from zero origin
+		const viewerStartPosition = new vec3.fromValues(0, 0, 0);
+		const viewerStartOrientation = new vec3.fromValues(0, 0, 0);
+
+		const cubeOrientation = new vec3.create();
+		const cubeMatrix = new mat4.create();
+
+		mat4.fromTranslation(cubeMatrix, viewerStartPosition);
+		vec3.copy(cubeOrientation, viewerStartOrientation);
+
+		xrRefSpace = (await session.requestReferenceSpace(preferredXRSpace)).getOffsetReferenceSpace(
+			new XRRigidTransform(viewerStartPosition, viewerStartOrientation)
+		);
+
+		await renderer.getContext().makeXRCompatible();
+		renderer.domElement.hidden = false;
+
+		let layer = new XRWebGLLayer(xrSession, ctx);
+		xrSession.updateRenderState({baseLayer: layer});
+
+		session.requestAnimationFrame(onXRFrame);
+	}
+
+	function updateCanvas() {
+		if (!ctx) {
+			return;
+		}
+		ctx.strokeStyle = "rgb(102, 255, 102)";
+		ctx.drawImage(baseVideo, 0, 0, baseWidth, baseHeight);
+
+		for (let i = 0; i < cols; i++) {
+			for (let j = 0; j < rows; j++) {
+				let index = j + i * rows;
+				if (isSelected[index] && isReady[index]) {
+					ctx.drawImage(enhanceVideos[index], j * tileWidth, i * tileHeight, tileWidth, tileHeight);
+				}
+				ctx.strokeRect(j * tileWidth, i * tileHeight, tileWidth, tileHeight);
+			}
+		}
+	}
+
+	function updateVideo() {
+		updateCanvas();
+		if (texture) {
+			texture.needsUpdate = true;
+		}
+	}
+
+	function onXRFrame(time, frame) {
+		let pose = frame.getViewerPose(xrRefSpace);
+		xrSession.requestAnimationFrame(onXRFrame);
+
+		camera.matrixAutoUpdate = false;
+		renderer.autoClear = false;
+
+		if (pose) {
+			for (let view in pose.views) {
+
+			}
+		}
+		renderer.render(scene, camera);
+		updateVideo();
+	}
+
+	initXR();
+</script>
+
+</body>
+</html>
