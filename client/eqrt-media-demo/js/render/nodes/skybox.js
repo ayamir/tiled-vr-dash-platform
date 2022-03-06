@@ -25,7 +25,7 @@ Node for displaying 360 equirect images as a skybox.
 import {Material, RENDER_ORDER} from '../core/material.js';
 import {Primitive, PrimitiveAttribute} from '../core/primitive.js';
 import {Node} from '../core/node.js';
-import {UrlTexture} from '../core/texture.js';
+import {UrlTexture, VideoTexture} from '../core/texture.js';
 
 const GL = WebGLRenderingContext; // For enums
 
@@ -84,7 +84,7 @@ export class SkyboxNode extends Node {
   constructor(options) {
     super();
 
-    this._url = options.url;
+    this._video = options.video;
     this._displayMode = options.displayMode || 'mono';
     this._rotationY = options.rotationY || 0;
   }
@@ -139,7 +139,7 @@ export class SkyboxNode extends Node {
     primitive.setIndexBuffer(indexBuffer);
 
     let material = new SkyboxMaterial();
-    material.image.texture = new UrlTexture(this._url);
+    material.image.texture = new VideoTexture(this._video);
 
     switch (this._displayMode) {
       case 'mono':

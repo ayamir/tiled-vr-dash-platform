@@ -55,6 +55,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <script src="./js/chart/chart.js"></script>
     <script src="./js/chart/chart.utils.js"></script>
     <script src="./js/chart/chartjs-plugin-datalabels.js"></script>
+    <!-- WebGL -->
+    <script src="./js/webgl/webgl-utils.js"></script>
+    <script src="./js/webgl/m4.js"></script>
 </head>
 
 <body>
@@ -62,7 +65,29 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <p>Click 'Enter VR' to see content</p>
     <canvas height="400" id="chart" width="400"></canvas>
 </main>
+<script id="drawImage-vertex-shader" type="x-shader/x-vertex">
+    attribute vec4 a_position;
+    attribute vec2 a_texcoord;
+
+    uniform mat4 u_matrix;
+    varying vec2 v_texcoord;
+
+    void main() {
+        gl_Position = u_matrix * a_position;
+        v_texcoord = a_texcoord;
+    }
+</script>
+<script id="drawImage-fragment-shader" type="x-shader/x-fragment">
+    precision mediump float;
+    varying vec2 v_texcoord;
+    uniform sampler2D u_texture;
+
+    void main() {
+        gl_FragColor = texture2D(u_texture, v_texcoord);
+    }
+</script>
 <script type="module">
+
 	import {WebXRButton} from "./js/util/webxr-button.js";
 	import {Scene, WebXRView} from "./js/render/scenes/scene.js";
 	import {
@@ -71,10 +96,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	} from "./js/render/core/renderer.js";
 	import {QueryArgs} from "./js/util/query-args.js";
 	import {MenuSystem} from "./js/render/nodes/menu-system.js";
+	import {SkyboxNode} from './js/render/nodes/skybox.js';
 	import {mat4, vec3} from "./js/matrix/index.js";
 	import WebXRPolyfill from "./js/third-party/webxr-polyfill/build/webxr-polyfill.module.js";
 
-	const {XRWebGLBinding, XRRigidTransform} = window;
+	const {XRWebGLLayer, XRRigidTransform} = window;
 
 	if (QueryArgs.getBool("usePolyfill", true)) {
 		let polyfill = new WebXRPolyfill();
@@ -115,10 +141,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let gl = null;
 	let renderer = null;
 	let scene = new Scene();
-
-	// Layer globals
-	let projLayer = null;
-	let eqrtLayer = null;
 
 	let labels = [];
 	/* x axis => vertical
@@ -197,7 +219,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			enhanceVideos[id] = video;
 			video.oncanplay = () => {
 				isReady[id] = true;
-            }
+			}
 			video.load();
 		}
 		let video = enhanceVideos[id];
@@ -229,25 +251,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		isSelected[id] = true;
 
 		await video.play();
-		video.currentTime = baseVideo.currentTime;
+		// video.currentTime = baseVideo.currentTime;
 		console.log("video played");
 	}
 
-	function loadTileVideos(sum) {
-		for (let i = 0; i < sum; i++) {
-			loadTileVideo(i, tileWidth, tileHeight);
-		}
-	}
-
-	async function loadBaseVideo() {
+	function loadBaseVideo() {
 		baseVideo = document.createElement("video");
 		baseVideo.loop = true;
 		baseVideo.crossOrigin = "anonymous";
 		baseVideo.preload = "auto";
 		baseVideo.autoload = true;
-
-		console.log(baseUrl);
-		console.log(baseVideo);
 		baseDash = dashjs.MediaPlayer().create();
 		baseDash.initialize(baseVideo, baseUrl, true);
 		baseDash.updateSettings({
@@ -259,7 +272,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		});
 		baseVideo.load();
 		console.log("baseVideo is loading");
-		await baseVideo.play();
+		console.log(baseVideo);
+		baseVideo.addEventListener("canplay", () => {
+			scene.addNode(new SkyboxNode({
+				video: baseVideo,
+				displayMode: "stereoTopBottom",
+			}));
+			baseVideo.play();
+        }, false);
 
 		timingSyncSrc = new TIMINGSRC.TimingObject({
 			position: baseVideo.currentTime
@@ -313,7 +333,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		if (!xrSession) {
 			navigator.xr
 				.requestSession("immersive-vr", {
-					requiredFeatures: ["layers"]
+					requiredFeatures: ["local"]
 				})
 				.then(onSessionStarted);
 		} else {
@@ -324,16 +344,103 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	function onEndSession() {
 		if (xrSession) {
 			xrSession.end();
-        }
+		}
 		baseVideo.pause();
 		gl = null;
+	}
+
+	function initTexture(gl) {
+		const texture = gl.createTexture();
+		gl.bindTexture(gl.TEXTURE_2D, texture);
+
+		const level = 0;
+		const internalFormat = gl.RGBA;
+		const width = 1;
+		const height = 1;
+		const border = 0;
+		const srcFormat = gl.RGBA;
+		const srcType = gl.UNSIGNED_BYTE;
+		const pixel = new Uint8Array([0, 0, 255, 255]);
+		gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border, srcFormat, srcType, pixel);
+
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+		return texture;
+	}
+
+	function updateTexture(gl, texture, video) {
+		const level = 0;
+		const internalFormat = gl.RGBA;
+		const srcFormat = gl.RGBA;
+		const srcType = gl.UNSIGNED_BYTE;
+		gl.bindTexture(gl.TEXTURE_2D, texture);
+		gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, video);
+	}
+
+	function drawImage(tex, texWidth, texHeight, dstX, dstY) {
+		let program = webglUtils.createProgramFromScripts(
+			gl, ["drawImage-vertex-shader", "drawImage-fragment-shader"]
+		);
+		let positionLocation = gl.getAttribLocation(program, "a_position");
+		let texcoordLocation = gl.getAttribLocation(program, "a_texcoord");
+
+		let matrixLocation = gl.getUniformLocation(program, "u_matrix");
+		let textureLocation = gl.getUniformLocation(program, "u_texture");
+
+		let positionBuffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+		let positions = [
+			0, 0,
+			0, 1,
+			1, 0,
+			1, 0,
+			0, 1,
+			1, 1,
+		];
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+		let texcoordBuffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+		let texcoords = [
+			0, 0,
+			0, 1,
+			1, 0,
+			1, 0,
+			0, 1,
+			1, 1,
+		];
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texcoords), gl.STATIC_DRAW);
+		gl.bindTexture(gl.TEXTURE_2D, tex);
+
+		// tell webgl to use program
+		gl.useProgram(program);
+
+		// pull data from buffer
+		gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+		gl.enableVertexAttribArray(positionLocation);
+		gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+		gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+		gl.enableVertexAttribArray(texcoordLocation);
+		gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+		// convert matrix from pixels to clip space
+		let matrix = m4.orthographic(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
+
+		// translate quad to dstX, dstY
+		matrix = m4.translate(matrix, dstX, dstY, 0);
+		matrix = m4.scale(matrix, texWidth, texHeight);
+		gl.uniformMatrix4fv(matrixLocation, false, matrix);
+		gl.uniform1i(textureLocation, 0);
+		gl.drawArrays(gl.TRIANGLES, 0, 6);
 	}
 
 	function initGL() {
 		if (gl) {
 			return;
 		}
-		gl = createWebGLContext({xrCompatible: true, webgl2: true});
+		gl = createWebGLContext({xrCompatible: true});
 		document.body.appendChild(gl.canvas);
 		gl.clearColor(0.0, 0, 0, 0.0);
 
@@ -349,9 +456,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 		renderer = new Renderer(gl);
 		scene.setRenderer(renderer);
-
-		// Util for rendering stereo layers
-		stereoUtil = new VRStereoUtil(gl);
 	}
 
 	function onSessionStarted(session) {
@@ -360,9 +464,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		session.addEventListener("end", onSessionEnded);
 
 		initGL();
+		scene.inputRenderer.useProfileControllerMeshes(session);
 
-		xrFramebuffer = gl.createFramebuffer();
-		xrGLFactory = new XRWebGLBinding(session, gl);
+		let glLayer = new XRWebGLLayer(session, gl);
+		session.updateRenderState({baseLayer: glLayer});
 
 		// Start from zero origin
 		const viewerStartPosition = new vec3.fromValues(0, 0, 0);
@@ -374,40 +479,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		mat4.fromTranslation(cubeMatrix, viewerStartPosition);
 		vec3.copy(cubeOrientation, viewerStartOrientation);
 
-		loadBaseVideo().then(() => {
-			session.requestReferenceSpace("local").then((refSpace) => {
-				xrRefSpace = refSpace.getOffsetReferenceSpace(
-					new XRRigidTransform(
-						viewerStartPosition,
-						cubeOrientation
-					)
+		loadBaseVideo();
+
+		session.requestReferenceSpace("local").then((refSpace) => {
+			xrRefSpace = refSpace.getOffsetReferenceSpace(
+				new XRRigidTransform(
+					viewerStartPosition,
+					cubeOrientation
 				)
-				projLayer = xrGLFactory.createProjectionLayer({
-					space: refSpace,
-					stencil: false
-				});
-				eqrtLayer = xrGLFactory.createEquirectLayer({
-					space: refSpace,
-					viewPixelWidth:
-						baseWidth /
-						(baseLayout === "stereo-left-right" ? 2 : 1),
-					viewPixelHeight:
-						baseHeight /
-						(baseLayout === "stereo-top-bottom" ? 2 : 1),
-					centralHorizontalAngle: (Math.PI * baseAngle) / 180,
-					upperVerticalAngle: Math.PI / 2.0,
-					lowerVerticalAngle: -Math.PI / 2.0,
-					radius: baseRadius,
-					layout: baseLayout
-				});
+			)
 
-				session.updateRenderState({
-					layers: [eqrtLayer, projLayer]
-				});
-
-				session.requestAnimationFrame(onXRFrame);
-			});
-        });
+			session.requestAnimationFrame(onXRFrame);
+		});
 	}
 
 	function drawChart() {
@@ -496,29 +579,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 	function onXRFrame(time, frame) {
 		let pose = frame.getViewerPose(xrRefSpace);
+		scene.startFrame();
 		xrSession.requestAnimationFrame(onXRFrame);
 
-		if (eqrtLayer && (baseVideoNeedRedraw || eqrtLayer.needsRedraw)) {
-			baseVideoNeedRedraw = false;
-			let glayer = xrGLFactory.getSubImage(eqrtLayer, frame);
-
-			// TEXTURE_CUBE_MAP expects the Y to be flipped for the faces and it already
-			// is flipped in our texture image.
-			gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-			gl.bindTexture(gl.TEXTURE_2D, glayer.colorTexture);
-			gl.texSubImage2D(
-				gl.TEXTURE_2D,
-				0,
-				0,
-				0,
-				baseWidth,
-				baseHeight,
-				gl.RGBA,
-				gl.UNSIGNED_BYTE,
-				baseVideo
-			);
-			gl.bindTexture(gl.TEXTURE_2D, null);
-		}
+		scene.updateInputSources(frame, xrRefSpace);
+        scene.drawXRFrame(frame, pose);
 
 		if (pose) {
 			let x = pose.transform.orientation.x;
@@ -526,42 +591,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			// For draw trace graph
 			orientationXs.push(x);
 			orientationYs.push(y);
-
-			gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
-			// We need to invalidate the color (and depth, just in case) here to avoid
-			// loading from the previously bound color texture. It will save some GPU time.
-			gl.invalidateFramebuffer(gl.FRAMEBUFFER, [
-				gl.COLOR_ATTACHMENT0,
-				gl.DEPTH_ATTACHMENT
-			]);
-
-			scene.updateInputSources(frame, xrRefSpace);
-			menuSystem.processInput(frame, scene, xrRefSpace);
-
-			let views = [];
-			for (let view of pose.views) {
-				let viewport = null;
-				let glLayer = xrGLFactory.getViewSubImage(projLayer, view);
-				glLayer.framebuffer = xrFramebuffer;
-				viewport = glLayer.viewport;
-				gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
-				gl.framebufferTexture2D(
-					gl.FRAMEBUFFER,
-					gl.COLOR_ATTACHMENT0,
-					gl.TEXTURE_2D,
-					glLayer.colorTexture,
-					0
-				);
-				gl.framebufferTexture2D(
-					gl.FRAMEBUFFER,
-					gl.DEPTH_ATTACHMENT,
-					gl.TEXTURE_2D,
-					glLayer.depthStencilTexture,
-					0
-				);
-				views.push(new WebXRView(view, glLayer, viewport));
-			}
-			scene.drawViewArray(views);
 		}
 		scene.endFrame();
 	}
