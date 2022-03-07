@@ -440,7 +440,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		if (gl) {
 			return;
 		}
-		gl = createWebGLContext({xrCompatible: true});
+		gl = createWebGLContext({xrCompatible: true, webgl2: true});
 		document.body.appendChild(gl.canvas);
 		gl.clearColor(0.0, 0, 0, 0.0);
 

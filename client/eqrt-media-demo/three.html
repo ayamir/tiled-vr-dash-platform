@@ -12,6 +12,30 @@
 <script src="./js/dash/dash.all.min.js"></script>
 <script src="./js/dash/mediasync.js"></script>
 <script src="./js/dash/timingsrc-v2.js"></script>
+<!-- WebGL -->
+<script src="./js/webgl/webgl-utils.js"></script>
+<script src="./js/webgl/m4.js"></script>
+<script id="drawImage-vertex-shader" type="x-shader/x-vertex">
+    attribute vec4 a_position;
+    attribute vec2 a_texcoord;
+
+    uniform mat4 u_matrix;
+    varying vec2 v_texcoord;
+
+    void main() {
+        gl_Position = u_matrix * a_position;
+        v_texcoord = a_texcoord;
+    }
+</script>
+<script id="drawImage-fragment-shader" type="x-shader/x-fragment">
+    precision mediump float;
+    varying vec2 v_texcoord;
+    uniform sampler2D u_texture;
+
+    void main() {
+        gl_FragColor = texture2D(u_texture, v_texcoord);
+    }
+</script>
 <script type="module">
 	import {WebXRButton} from "./js/util/webxr-button.js";
 	import {mat4, vec3} from "./js/matrix/index.js";
@@ -19,6 +43,7 @@
 
 	const {XRRigidTransform} = window;
 
+	let videoTexture = null;
 	let radius = 0;
 	let rows = 0;
 	let cols = 0;
@@ -52,7 +77,7 @@
 		x: 0, y: 0, z: 0
 	}
 
-	let ctx = null;
+	let gl = null;
 	let canvas = null;
 	let container = null;
 	let xrButton = null;
@@ -71,6 +96,93 @@
 	let material2 = null;
 	let mesh1 = null;
 	let mesh2 = null;
+
+	function initTexture() {
+		const texture = gl.createTexture();
+		gl.bindTexture(gl.TEXTURE_2D, texture);
+
+		const level = 0;
+		const internalFormat = gl.RGBA;
+		const width = 1;
+		const height = 1;
+		const border = 0;
+		const srcFormat = gl.RGBA;
+		const srcType = gl.UNSIGNED_BYTE;
+		const pixel = new Uint8Array([0, 0, 255, 255]);
+		gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border, srcFormat, srcType, pixel);
+
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+		return texture;
+	}
+
+	function updateTexture(texture, video) {
+		const level = 0;
+		const internalFormat = gl.RGBA;
+		const srcFormat = gl.RGBA;
+		const srcType = gl.UNSIGNED_BYTE;
+		gl.bindTexture(gl.TEXTURE_2D, texture);
+		gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, video);
+	}
+
+	function drawImage(tex, texWidth, texHeight, dstX, dstY) {
+		let program = webglUtils.createProgramFromScripts(
+			gl, ["drawImage-vertex-shader", "drawImage-fragment-shader"]
+		);
+		let positionLocation = gl.getAttribLocation(program, "a_position");
+		let texcoordLocation = gl.getAttribLocation(program, "a_texcoord");
+
+		let matrixLocation = gl.getUniformLocation(program, "u_matrix");
+		let textureLocation = gl.getUniformLocation(program, "u_texture");
+
+		let positionBuffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+		let positions = [
+			0, 0,
+			0, 1,
+			1, 0,
+			1, 0,
+			0, 1,
+			1, 1,
+		];
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+		let texcoordBuffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+		let texcoords = [
+			0, 0,
+			0, 1,
+			1, 0,
+			1, 0,
+			0, 1,
+			1, 1,
+		];
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texcoords), gl.STATIC_DRAW);
+		gl.bindTexture(gl.TEXTURE_2D, tex);
+
+		// tell webgl to use program
+		gl.useProgram(program);
+
+		// pull data from buffer
+		gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+		gl.enableVertexAttribArray(positionLocation);
+		gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+		gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+		gl.enableVertexAttribArray(texcoordLocation);
+		gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+		// convert matrix from pixels to clip space
+		let matrix = m4.orthographic(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
+
+		// translate quad to dstX, dstY
+		matrix = m4.translate(matrix, dstX, dstY, 0);
+		matrix = m4.scale(matrix, texWidth, texHeight);
+		gl.uniformMatrix4fv(matrixLocation, false, matrix);
+		gl.uniform1i(textureLocation, 0);
+		gl.drawArrays(gl.TRIANGLES, 0, 6);
+	}
 
 	function myFetch(source) {
 		return fetch(source).then((response) => {
@@ -108,8 +220,8 @@
 		tileHeight = data.tileHeight;
 
 		xrButton = new WebXRButton({
-			onRequestSession: onRequestSession,
 			onEndSession: onEndSession,
+			onRequestSession: onRequestSession,
 		})
 		container = document.querySelector("main");
 		container.appendChild(xrButton.domElement);
@@ -130,7 +242,7 @@
 	function onRequestSession() {
 		if (!xrSession) {
 			navigator.xr.requestSession("immersive-vr", {
-				requiredFeatures: [preferredFeature],
+				optionalFeatures: ["local-floor", "bounded-floor"],
 			}).then(onSessionStarted);
 		} else {
 			onEndSession();
@@ -153,7 +265,7 @@
 			longFormContentDurationThreshold: 200
 		});
 		baseVideo.load();
-		baseVideo.play();
+		await baseVideo.play();
 		timingSyncSrc = new TIMINGSRC.TimingObject({
 			position: baseVideo.currentTime
 		});
@@ -176,15 +288,15 @@
 		container.appendChild(canvas);
 
 		// init ctx
-		ctx = canvas.getContext("2d");
-		ctx.scale(2, 2);
-		ctx.imageSmoothingQuality = "high";
+		gl = canvas.getContext("webgl2");
 
 		// init renderer
-		renderer = new THREE.WebGLRenderer({antialias: true});
+		renderer = new THREE.WebGLRenderer({antialias: true, context: gl});
 		renderer.setPixelRatio(window.devicePixelRatio);
 		renderer.setSize(width, height);
 		renderer.xr.enabled = true;
+		renderer.xr.setReferenceSpaceType(preferredXRSpace);
+		await renderer.xr.setSession(session);
 		renderer.sortObjects = false;
 		renderer.autoClear = false;
 		container.appendChild(renderer.domElement);
@@ -199,12 +311,14 @@
 		scene.add(camera);
 
 		// init texture
-		texture = new THREE.CanvasTexture(canvas);
-		texture.needsUpdate = true;
+		texture = new THREE.VideoTexture({
+            video: baseVideo,
+            mapping: THREE.EquirectangularReflectionMapping
+		});
 
 		// init geometry
-		geometry1 = new THREE.SphereBufferGeometry(radius, 80, 40);
-		geometry2 = new THREE.SphereBufferGeometry(radius, 80, 40);
+		geometry1 = new THREE.SphereGeometry(radius, 80, 40);
+		geometry2 = new THREE.SphereGeometry(radius, 80, 40);
 		geometry1.scale(-1, 1, 1);
 		geometry2.scale(-1, 1, 1);
 		const uvs1 = geometry1.attributes.uv.array;
@@ -230,52 +344,17 @@
 		mesh2.layers.set(2);
 		scene.add(mesh2);
 
-		// Start from zero origin
-		const viewerStartPosition = new vec3.fromValues(0, 0, 0);
-		const viewerStartOrientation = new vec3.fromValues(0, 0, 0);
-
-		const cubeOrientation = new vec3.create();
-		const cubeMatrix = new mat4.create();
-
-		mat4.fromTranslation(cubeMatrix, viewerStartPosition);
-		vec3.copy(cubeOrientation, viewerStartOrientation);
-
-		xrRefSpace = (await session.requestReferenceSpace(preferredXRSpace)).getOffsetReferenceSpace(
-			new XRRigidTransform(viewerStartPosition, viewerStartOrientation)
-		);
-
 		await renderer.getContext().makeXRCompatible();
 		renderer.domElement.hidden = false;
 
-		let layer = new XRWebGLLayer(xrSession, ctx);
+		let layer = new XRWebGLLayer(xrSession, gl);
 		xrSession.updateRenderState({baseLayer: layer});
 
 		session.requestAnimationFrame(onXRFrame);
 	}
 
-	function updateCanvas() {
-		if (!ctx) {
-			return;
-		}
-		ctx.strokeStyle = "rgb(102, 255, 102)";
-		ctx.drawImage(baseVideo, 0, 0, baseWidth, baseHeight);
-
-		for (let i = 0; i < cols; i++) {
-			for (let j = 0; j < rows; j++) {
-				let index = j + i * rows;
-				if (isSelected[index] && isReady[index]) {
-					ctx.drawImage(enhanceVideos[index], j * tileWidth, i * tileHeight, tileWidth, tileHeight);
-				}
-				ctx.strokeRect(j * tileWidth, i * tileHeight, tileWidth, tileHeight);
-			}
-		}
-	}
-
-	function updateVideo() {
-		updateCanvas();
-		if (texture) {
-			texture.needsUpdate = true;
-		}
+	function updateInput(frame) {
+        
 	}
 
 	function onXRFrame(time, frame) {
@@ -286,12 +365,23 @@
 		renderer.autoClear = false;
 
 		if (pose) {
-			for (let view in pose.views) {
+			let xrLayer = xrSession.renderState.baseLayer;
+			updateInput(frame);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer);
+			gl.clearColor(0, 0, 0, 1.0);
+			gl.clearDepth(1.0);
+			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+			for (let view of pose.views) {
+                let viewport = xrLayer.getViewport(view);
+				renderer.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
+				const viewMatrix = view.transform.inverse.matrix;
+				camera.projectionMatrix.fromArray(view.projectionMatrix);
+				camera.matrix.fromArray(viewMatrix).copy(camera.matrix).invert();
+				camera.updateMatrixWorld(true);
 			}
 		}
 		renderer.render(scene, camera);
-		updateVideo();
 	}
 
 	initXR();
