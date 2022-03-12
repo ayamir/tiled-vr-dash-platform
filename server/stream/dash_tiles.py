@@ -44,7 +44,7 @@ def generate_json(
     rows: int,
     cols: int,
     video_output_dir: str,
-    url_prefix: str = "http://192.168.1.129/~ayamir/070",
+    url_prefix: str = "https://10.112.79.143/files/070",
     fov: int = 100,
     is_rotate: bool = False,
     rotate_speed: float = 1.0,
@@ -56,7 +56,6 @@ def generate_json(
     dest = utils.cwd + "/../client/react-xrplayer/public/mock/view-tiled.json"
 
     if is_https:
-        url_prefix = "https://192.168.1.129/files/070"
         dest = "/opt/player/react-xrplayer/mock/view-tiled.json"
 
     res_urls = []
