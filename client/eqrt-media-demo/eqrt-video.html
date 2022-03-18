@@ -19,7 +19,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 -->
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8"/>
     <meta
@@ -55,9 +55,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <script src="./js/chart/chart.js"></script>
     <script src="./js/chart/chart.utils.js"></script>
     <script src="./js/chart/chartjs-plugin-datalabels.js"></script>
-    <!-- WebGL -->
-    <script src="./js/webgl/webgl-utils.js"></script>
-    <script src="./js/webgl/m4.js"></script>
 </head>
 
 <body>
@@ -89,22 +86,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 <script type="module">
 
 	import {WebXRButton} from "./js/util/webxr-button.js";
-	import {Scene, WebXRView} from "./js/render/scenes/scene.js";
+	import {Scene} from "./js/render/scenes/scene.js";
 	import {
 		Renderer,
 		createWebGLContext
 	} from "./js/render/core/renderer.js";
-	import {QueryArgs} from "./js/util/query-args.js";
-	import {MenuSystem} from "./js/render/nodes/menu-system.js";
 	import {SkyboxNode} from './js/render/nodes/skybox.js';
-	import {mat4, vec3} from "./js/matrix/index.js";
-	import WebXRPolyfill from "./js/third-party/webxr-polyfill/build/webxr-polyfill.module.js";
 
 	const {XRWebGLLayer, XRRigidTransform} = window;
-
-	if (QueryArgs.getBool("usePolyfill", true)) {
-		let polyfill = new WebXRPolyfill();
-	}
 
 	let baseDash = null;
 	let baseVideo = null;
@@ -133,8 +122,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let xrButton = null;
 	let xrSession = null;
 	let xrRefSpace = null;
-	let xrGLFactory = null;
-	let xrFramebuffer = null;
 	let stereoUtil = null;
 
 	// WebGL scene globals.
@@ -287,8 +274,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		createEnhanceNode(sum);
 
 		xrButton = new WebXRButton({
+			onEndSession: onEndSession,
 			onRequestSession: onRequestSession,
-			onEndSession: onEndSession
 		});
 		document.querySelector("main").appendChild(xrButton.domElement);
 
@@ -319,93 +306,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		}
 		baseVideo.pause();
 		gl = null;
-	}
-
-	function initTexture(gl) {
-		const texture = gl.createTexture();
-		gl.bindTexture(gl.TEXTURE_2D, texture);
-
-		const level = 0;
-		const internalFormat = gl.RGBA;
-		const width = 1;
-		const height = 1;
-		const border = 0;
-		const srcFormat = gl.RGBA;
-		const srcType = gl.UNSIGNED_BYTE;
-		const pixel = new Uint8Array([0, 0, 255, 255]);
-		gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border, srcFormat, srcType, pixel);
-
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-
-		return texture;
-	}
-
-	function updateTexture(gl, texture, video) {
-		const level = 0;
-		const internalFormat = gl.RGBA;
-		const srcFormat = gl.RGBA;
-		const srcType = gl.UNSIGNED_BYTE;
-		gl.bindTexture(gl.TEXTURE_2D, texture);
-		gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, video);
-	}
-
-	function drawImage(tex, texWidth, texHeight, dstX, dstY) {
-		let program = webglUtils.createProgramFromScripts(
-			gl, ["drawImage-vertex-shader", "drawImage-fragment-shader"]
-		);
-		let positionLocation = gl.getAttribLocation(program, "a_position");
-		let texcoordLocation = gl.getAttribLocation(program, "a_texcoord");
-
-		let matrixLocation = gl.getUniformLocation(program, "u_matrix");
-		let textureLocation = gl.getUniformLocation(program, "u_texture");
-
-		let positionBuffer = gl.createBuffer();
-		gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-		let positions = [
-			0, 0,
-			0, 1,
-			1, 0,
-			1, 0,
-			0, 1,
-			1, 1,
-		];
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-		let texcoordBuffer = gl.createBuffer();
-		gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-		let texcoords = [
-			0, 0,
-			0, 1,
-			1, 0,
-			1, 0,
-			0, 1,
-			1, 1,
-		];
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texcoords), gl.STATIC_DRAW);
-		gl.bindTexture(gl.TEXTURE_2D, tex);
-
-		// tell webgl to use program
-		gl.useProgram(program);
-
-		// pull data from buffer
-		gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-		gl.enableVertexAttribArray(positionLocation);
-		gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-		gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-		gl.enableVertexAttribArray(texcoordLocation);
-		gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
-
-		// convert matrix from pixels to clip space
-		let matrix = m4.orthographic(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
-
-		// translate quad to dstX, dstY
-		matrix = m4.translate(matrix, dstX, dstY, 0);
-		matrix = m4.scale(matrix, texWidth, texHeight);
-		gl.uniformMatrix4fv(matrixLocation, false, matrix);
-		gl.uniform1i(textureLocation, 0);
-		gl.drawArrays(gl.TRIANGLES, 0, 6);
 	}
 
 	function initGL() {
@@ -450,8 +350,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 					{x: 0, y: 0, z: 0},
 					{x: 0, y: 1, z: 0, w: 0},
 				)
-			)
-
+			);
 			session.requestAnimationFrame(onXRFrame);
 		});
 	}
@@ -548,24 +447,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		scene.updateInputSources(frame, xrRefSpace);
         scene.drawXRFrame(frame, pose);
 
-		let radPerDeg = Math.PI / 180;
+		const radPerDeg = Math.PI / 180;
 		let radToDeg = (rad) => rad / radPerDeg;
 
 		if (pose) {
-			// y represent longitude
-            // half of sphere is 90 degree
-            // the split point of -1 and +1 is a jump break
-			let y = radToDeg(Math.acos(pose.transform.orientation.y));
-			// z represent latitude
-            // half of sphere is 45 degree
-			let z = radToDeg(Math.asin(pose.transform.orientation.z));
-			// For draw trace graph
-			orientationYs.push(y);
-			orientationZs.push(z);
+			let yaw = radToDeg(Math.acos(pose.transform.orientation.y)) * 2;
+			let pitch = radToDeg(Math.asin(pose.transform.orientation.z)) * 2;
 
-			if (orientationYs.length >= 300) {
-				onEndSession();
-            }
+			// For draw trace graph
+			orientationYs.push(yaw);
+			orientationZs.push(pitch);
 		}
 		scene.endFrame();
 	}
