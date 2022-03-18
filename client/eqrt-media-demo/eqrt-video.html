@@ -143,36 +143,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let scene = new Scene();
 
 	let labels = [];
-	/* x axis => vertical
-	   y axis => depth
-	   z axis => horizontal */
-	let orientationXs = [];
 	let orientationYs = [];
-
-	// Set up media control bar
-	let menuSystem = new MenuSystem();
-	menuSystem.createButton(
-		"./media/textures/backward-button.png",
-		() => {
-			baseVideo.currentTime -= 15;
-		}
-	);
-	menuSystem.createSwitch(
-		"./media/textures/pause-button.png",
-		() => baseVideo.pause(),
-		"./media/textures/play-button.png",
-		() => baseVideo.play()
-	);
-	menuSystem.createButton(
-		"./media/textures/forward-button.png",
-		() => {
-			baseVideo.currentTime += 15;
-		}
-	);
-	menuSystem.createButton("./media/textures/x-button.png", () => {
-		onEndSession();
-	});
-	scene.addNode(menuSystem.getMenuBarNode());
+	let orientationZs = [];
 
 	function myFetch(source) {
 		return fetch(source).then((response) => {
@@ -276,7 +248,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		baseVideo.addEventListener("canplay", () => {
 			scene.addNode(new SkyboxNode({
 				video: baseVideo,
-				displayMode: "stereoTopBottom",
+				displayMode: baseLayout,
 			}));
 			baseVideo.play();
         }, false);
@@ -470,22 +442,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		session.updateRenderState({baseLayer: glLayer});
 
 		// Start from zero origin
-		const viewerStartPosition = new vec3.fromValues(0, 0, 0);
-		const viewerStartOrientation = new vec3.fromValues(0, 0, 0);
-
-		const cubeOrientation = new vec3.create();
-		const cubeMatrix = new mat4.create();
-
-		mat4.fromTranslation(cubeMatrix, viewerStartPosition);
-		vec3.copy(cubeOrientation, viewerStartOrientation);
-
 		loadBaseVideo();
 
 		session.requestReferenceSpace("local").then((refSpace) => {
 			xrRefSpace = refSpace.getOffsetReferenceSpace(
 				new XRRigidTransform(
-					viewerStartPosition,
-					cubeOrientation
+					{x: 0, y: 0, z: 0},
+					{x: 0, y: 1, z: 0, w: 0},
 				)
 			)
 
@@ -494,7 +457,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function drawChart() {
-		let dataCount = orientationXs.length;
+		let dataCount = orientationYs.length;
 		for (let i = 1; i <= dataCount; i++) {
 			labels.push("" + i);
 		}
@@ -502,16 +465,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			labels: labels,
 			datasets: [
 				{
-					label: "orientation.x",
-					backgroundColor: Samples.utils.color(0),
-					borderColor: Samples.utils.color(0),
-					data: orientationXs
-				},
-				{
 					label: "orientation.y",
 					backgroundColor: Samples.utils.color(1),
 					borderColor: Samples.utils.color(1),
 					data: orientationYs
+				},
+				{
+					label: "orientation.z",
+					backgroundColor: Samples.utils.color(2),
+					borderColor: Samples.utils.color(2),
+					data: orientationZs
 				},
 			]
 		};
@@ -561,6 +524,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			}
 		};
 		const chart = new Chart(ctx, config);
+
+		console.log("MaxY=" + Math.max(...orientationYs) + ", MinY=" + Math.min(...orientationYs));
+		console.log("MaxZ=" + Math.max(...orientationZs) + ", MinZ=" + Math.min(...orientationZs));
 	}
 
 	function onSessionEnded(event) {
@@ -572,9 +538,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		gl = null;
 
 		drawChart();
-
-		console.log("MaxX=" + Math.max(...orientationXs) + ", MinX=" + Math.min(...orientationXs));
-		console.log("MaxY=" + Math.max(...orientationYs) + ", MinY=" + Math.min(...orientationYs));
 	}
 
 	function onXRFrame(time, frame) {
@@ -585,12 +548,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		scene.updateInputSources(frame, xrRefSpace);
         scene.drawXRFrame(frame, pose);
 
+		let radPerDeg = Math.PI / 180;
+		let radToDeg = (rad) => rad / radPerDeg;
+
 		if (pose) {
-			let x = pose.transform.orientation.x;
-			let y = pose.transform.orientation.y;
+			// y represent longitude
+            // half of sphere is 90 degree
+            // the split point of -1 and +1 is a jump break
+			let y = radToDeg(Math.acos(pose.transform.orientation.y));
+			// z represent latitude
+            // half of sphere is 45 degree
+			let z = radToDeg(Math.asin(pose.transform.orientation.z));
 			// For draw trace graph
-			orientationXs.push(x);
 			orientationYs.push(y);
+			orientationZs.push(z);
+
+			if (orientationYs.length >= 300) {
+				onEndSession();
+            }
 		}
 		scene.endFrame();
 	}
