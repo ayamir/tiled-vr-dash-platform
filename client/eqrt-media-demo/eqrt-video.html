@@ -111,8 +111,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let cols = 0;
 	let urls = null;
 
+	let threshold = 0;
 	let isReady = [];
 	let isSelected = [];
+	let tileCenters = [];
 	let enhanceVideos = [];
 	let enhanceDash = [];
 	let videoMediaSync = [];
@@ -129,6 +131,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let renderer = null;
 	let scene = new Scene();
 
+	let radius = 1;
+	let yaw = 0;
+	let pitch = 0;
+	let x = 0;
+	let y = 0;
+	let z = 0;
 	let labels = [];
 	let orientationYs = [];
 	let orientationZs = [];
@@ -171,15 +179,19 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		video.setAttribute("loop", "loop");
 	}
 
-	async function loadTileVideo(id, width, height) {
+	function loadTile(id) {
 		if (enhanceVideos[id] === null) {
 			let video = document.createElement("video");
-			initVideoNode(video, width, height);
+			initVideoNode(video, tileWidth, tileHeight);
 			enhanceVideos[id] = video;
 			video.oncanplay = () => {
 				isReady[id] = true;
 			}
 			video.load();
+			video.addEventListener("canplay", () => {
+				// TODO: add tiled node to scene
+				video.play();
+            }, false)
 		}
 		let video = enhanceVideos[id];
 		if (enhanceDash[id] === null) {
@@ -208,11 +220,19 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			}
 		}
 		isSelected[id] = true;
-
-		await video.play();
 		// video.currentTime = baseVideo.currentTime;
 		console.log("video played");
 	}
+
+	function unloadTile(id) {
+		let video = enhanceVideos[id];
+		video.pause();
+		let dash = enhanceDash[id];
+		dash.pause();
+		videoMediaSync[id].pause(true);
+		isReady[id] = false;
+		isSelected[id] = false;
+    }
 
 	function loadBaseVideo() {
 		baseVideo = document.createElement("video");
@@ -230,8 +250,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			longFormContentDurationThreshold: 200
 		});
 		baseVideo.load();
-		console.log("baseVideo is loading");
-		console.log(baseVideo);
 		baseVideo.addEventListener("canplay", () => {
 			scene.addNode(new SkyboxNode({
 				video: baseVideo,
@@ -249,6 +267,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 				baseVideoNeedRedraw = true;
 			}
 		}, 1000 / baseFPS);
+	}
+
+	function initTileCenter() {
+		let unitPitch = 180 / cols;
+		let unitYaw = 360 / rows;
+        for (let i = 0; i < cols; i++) {
+	        let tilePitch = unitPitch * i + unitPitch / 2;
+			tilePitch = 90 - tilePitch;
+			for (let j = 0; j < rows; j++) {
+				let tileYaw = unitYaw * j + unitYaw / 2;
+				let point = convertXYZ(tilePitch, tileYaw);
+				tileCenters.push(point);
+            }
+        }
 	}
 
 	async function initXR() {
@@ -451,15 +483,52 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		let radToDeg = (rad) => rad / radPerDeg;
 
 		if (pose) {
-			let yaw = radToDeg(Math.acos(pose.transform.orientation.y)) * 2;
-			let pitch = radToDeg(Math.asin(pose.transform.orientation.z)) * 2;
+			yaw = radToDeg(Math.acos(pose.transform.orientation.y)) * 2;
+			pitch = radToDeg(Math.asin(pose.transform.orientation.z)) * 2;
+
+			// update viewpoint x,y,z
+			let point = convertXYZ(pitch, yaw);
+			x = point.x;
+			y = point.y;
+			z = point.z;
 
 			// For draw trace graph
 			orientationYs.push(yaw);
 			orientationZs.push(pitch);
+
+			updateTiles();
 		}
 		scene.endFrame();
 	}
+
+	function convertXYZ(pitch, yaw) {
+		let projection = radius * Math.cos(pitch);
+		let x = projection * Math.cos(yaw);
+		let y = projection * Math.sin(yaw);
+		let z = radius * Math.sin(pitch);
+
+		return {x: x, y: y, z: z};
+	}
+
+	function getCenterDistanceSquare(id) {
+        const {tileX, tileY, tileZ} = tileCenters[id];
+		return Math.pow(x - tileX, 2) + Math.pow(y - tileY, 2) + Math.pow(z - tileZ, 2);
+	}
+
+	function updateTiles() {
+		for (let i = 0; i < rows * cols; i++) {
+			let distance = getCenterDistanceSquare(i);
+			if (distance <= threshold) {
+				if (isSelected[i] !== true) {
+					loadTile(i);
+                }
+            } else {
+				if (isSelected[i] === true) {
+					unloadTile(i);
+                }
+            }
+        }
+    }
 
 	initXR();
 </script>
