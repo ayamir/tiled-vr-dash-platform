@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 /*
-Node for displaying 360 equirect video as a skybox.
+Node for displaying 360 equirect images as a skybox.
 */
 
 import {Material, RENDER_ORDER} from '../core/material.js';
@@ -29,7 +29,7 @@ import {VideoTexture} from '../core/texture.js';
 
 const GL = WebGLRenderingContext; // For enums
 
-class SkyboxMaterial extends Material {
+class TileMaterial extends Material {
   constructor() {
     super();
     this.renderOrder = RENDER_ORDER.SKY;
@@ -44,7 +44,7 @@ class SkyboxMaterial extends Material {
   }
 
   get materialName() {
-    return 'SKYBOX';
+    return 'TILE';
   }
 
   get vertexSource() {
@@ -80,14 +80,18 @@ class SkyboxMaterial extends Material {
   }
 }
 
-export class SkyboxNode extends Node {
+export class TileNode extends Node {
   constructor(options) {
     super();
 
     this._video = options.video;
+    this._thetaStart = options.thetaStart;
+    this._thetaLength = options.thetaLength;
+    this._phiStart = options.phiStart;
+    this._phiLength = options.phiLength;
+
     this._displayMode = options.displayMode || 'mono';
     this._rotationY = options.rotationY || 0;
-
     this._video_texture = new VideoTexture(this._video);
   }
 
@@ -95,33 +99,30 @@ export class SkyboxNode extends Node {
     let vertices = [];
     let indices = [];
 
-    let latSegments = 40;
-    let lonSegments = 40;
+    let latSegments = 10;
+    let lonSegments = 10;
 
     // Create the vertices/indices
-    for (let i=0; i <= latSegments; ++i) {
-      let theta = i * Math.PI / latSegments;
-      let sinTheta = Math.sin(theta);
-      let cosTheta = Math.cos(theta);
+    for (let iy=0; iy <= latSegments; ++iy) {
+      let v = (iy / latSegments);
 
-      let idxOffsetA = i * (lonSegments+1);
-      let idxOffsetB = (i+1) * (lonSegments+1);
+      let idxOffsetA = iy * (lonSegments+1);
+      let idxOffsetB = (iy+1) * (lonSegments+1);
 
-      for (let j=0; j <= lonSegments; ++j) {
-        let phi = (j * 2 * Math.PI / lonSegments) + this._rotationY;
-        let x = Math.sin(phi) * sinTheta;
-        let y = cosTheta;
-        let z = -Math.cos(phi) * sinTheta;
-        let u = (j / lonSegments);
-        let v = (i / latSegments);
+      for (let ix=0; ix <= lonSegments; ++ix) {
+        let u = (ix / lonSegments);
+
+        let x = Math.sin(this._phiStart + u * this._phiLength) * Math.sin(this._thetaStart + v * this._thetaLength);
+        let y = Math.cos(this._thetaStart + v * this._thetaLength);
+        let z = -Math.cos(this._phiStart + u * this._phiLength) * Math.sin(this._thetaStart + v * this._thetaLength);
 
         // Vertex shader will force the geometry to the far plane, so the
         // radius of the sphere is immaterial.
         vertices.push(x, y, z, u, v);
 
-        if (i < latSegments && j < lonSegments) {
-          let idxA = idxOffsetA+j;
-          let idxB = idxOffsetB+j;
+        if (iy < latSegments && ix < lonSegments) {
+          let idxA = idxOffsetA+ix;
+          let idxB = idxOffsetB+ix;
 
           indices.push(idxA, idxB, idxA+1,
                        idxB, idxB+1, idxA+1);
@@ -140,7 +141,7 @@ export class SkyboxNode extends Node {
     let primitive = new Primitive(attribs, indices.length);
     primitive.setIndexBuffer(indexBuffer);
 
-    let material = new SkyboxMaterial();
+    let material = new TileMaterial();
     material.image.texture = this._video_texture;
 
     switch (this._displayMode) {

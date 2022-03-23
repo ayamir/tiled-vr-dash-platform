@@ -55,6 +55,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <script src="./js/chart/chart.js"></script>
     <script src="./js/chart/chart.utils.js"></script>
     <script src="./js/chart/chartjs-plugin-datalabels.js"></script>
+
+    <script src="./js/three.js"></script>
 </head>
 
 <body>
@@ -62,27 +64,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <p>Click 'Enter VR' to see content</p>
     <canvas height="400" id="chart" width="400"></canvas>
 </main>
-<script id="drawImage-vertex-shader" type="x-shader/x-vertex">
-    attribute vec4 a_position;
-    attribute vec2 a_texcoord;
-
-    uniform mat4 u_matrix;
-    varying vec2 v_texcoord;
-
-    void main() {
-        gl_Position = u_matrix * a_position;
-        v_texcoord = a_texcoord;
-    }
-</script>
-<script id="drawImage-fragment-shader" type="x-shader/x-fragment">
-    precision mediump float;
-    varying vec2 v_texcoord;
-    uniform sampler2D u_texture;
-
-    void main() {
-        gl_FragColor = texture2D(u_texture, v_texcoord);
-    }
-</script>
 <script type="module">
 
 	import {WebXRButton} from "./js/util/webxr-button.js";
@@ -91,7 +72,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		Renderer,
 		createWebGLContext
 	} from "./js/render/core/renderer.js";
-	import {SkyboxNode} from './js/render/nodes/skybox.js';
+	import {SkyboxNode} from "./js/render/nodes/skybox.js";
+	import {TileNode} from "./js/render/nodes/tile.js"
 
 	const {XRWebGLLayer, XRRigidTransform} = window;
 
@@ -111,7 +93,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let cols = 0;
 	let urls = null;
 
-	let threshold = 0;
+	let unitTheta = 0;
+	let unitPhi = 0;
+	let unitPitch = 0;
+	let unitYaw = 0;
+	let tilePositions = [];
+	let tileNodes = [];
+
+	let threshold = 0.5;
 	let isReady = [];
 	let isSelected = [];
 	let tileCenters = [];
@@ -131,15 +120,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let renderer = null;
 	let scene = new Scene();
 
+	let labels = [];
 	let radius = 1;
 	let yaw = 0;
 	let pitch = 0;
-	let x = 0;
-	let y = 0;
-	let z = 0;
-	let labels = [];
-	let orientationYs = [];
-	let orientationZs = [];
+	let yaws = [];
+	let pitches = [];
+	let viewPoint = {};
+
+	let eulerOrder = "XYZ";
+	let euler = new THREE.Euler(0, 0, 0, eulerOrder);
+	let quaternion = new THREE.Quaternion(0, 0, 0, 1);
 
 	function myFetch(source) {
 		return fetch(source).then((response) => {
@@ -147,13 +138,31 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		});
 	}
 
-	function createEnhanceNode(sum) {
-		for (let i = 0; i < sum; i++) {
-			isReady.push(false);
-			isSelected.push(false);
-			enhanceVideos.push(null);
-			enhanceDash.push(null);
-			videoMediaSync.push(null);
+	function createEnhanceNode() {
+		console.log("initializing tile position and center...");
+		for (let i = 0; i < cols; i++) {
+			let thetaStart = i * unitTheta;
+
+			let tilePitch = unitPitch * i + unitPitch / 2;
+			tilePitch = 90 - tilePitch;
+
+			for (let j = 0; j < rows; j++) {
+				let phiStart = j * unitPhi;
+
+				let tileYaw = unitYaw * j + unitYaw / 2;
+				let point = convertXYZ(tilePitch, tileYaw);
+
+				// init tile array
+				isReady.push(false);
+				isSelected.push(false);
+				enhanceVideos.push(null);
+				enhanceDash.push(null);
+				videoMediaSync.push(null);
+
+				tilePositions.push({thetaStart: thetaStart, phiStart: phiStart});
+
+				tileCenters.push(point);
+			}
 		}
 	}
 
@@ -180,7 +189,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function loadTile(id) {
-		if (enhanceVideos[id] === null) {
+		console.log("Loading tile " + id);
+		if (!enhanceVideos[id]) {
 			let video = document.createElement("video");
 			initVideoNode(video, tileWidth, tileHeight);
 			enhanceVideos[id] = video;
@@ -189,12 +199,21 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			}
 			video.load();
 			video.addEventListener("canplay", () => {
-				// TODO: add tiled node to scene
+				const {thetaStart, phiStart} = tilePositions[id];
+				scene.addNode(
+					new TileNode({
+						video: video,
+						thetaStart: thetaStart,
+						thetaLength: unitTheta,
+						phiStart: phiStart,
+						phiLength: unitPhi,
+					})
+                );
 				video.play();
-            }, false)
+			}, false)
 		}
 		let video = enhanceVideos[id];
-		if (enhanceDash[id] === null) {
+		if (!enhanceDash[id]) {
 			let dash = dashjs.MediaPlayer().create();
 			dash.initialize(video, urls[id], true);
 			dash.updateSettings({
@@ -209,8 +228,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			});
 			enhanceDash[id] = dash;
 		}
-		if (timingSyncSrc !== null) {
-			if (videoMediaSync[id] === null) {
+		if (timingSyncSrc) {
+			if (!videoMediaSync[id]) {
 				videoMediaSync[id] = new MCorp.mediaSync(
 					enhanceVideos[id],
 					timingSyncSrc
@@ -225,6 +244,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function unloadTile(id) {
+		console.log("Unloading tile " + id);
 		let video = enhanceVideos[id];
 		video.pause();
 		let dash = enhanceDash[id];
@@ -232,7 +252,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		videoMediaSync[id].pause(true);
 		isReady[id] = false;
 		isSelected[id] = false;
-    }
+	}
 
 	function loadBaseVideo() {
 		baseVideo = document.createElement("video");
@@ -254,9 +274,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			scene.addNode(new SkyboxNode({
 				video: baseVideo,
 				displayMode: baseLayout,
+				rotationY: 1,
 			}));
 			baseVideo.play();
-        }, false);
+		}, false);
 
 		timingSyncSrc = new TIMINGSRC.TimingObject({
 			position: baseVideo.currentTime
@@ -267,20 +288,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 				baseVideoNeedRedraw = true;
 			}
 		}, 1000 / baseFPS);
-	}
-
-	function initTileCenter() {
-		let unitPitch = 180 / cols;
-		let unitYaw = 360 / rows;
-        for (let i = 0; i < cols; i++) {
-	        let tilePitch = unitPitch * i + unitPitch / 2;
-			tilePitch = 90 - tilePitch;
-			for (let j = 0; j < rows; j++) {
-				let tileYaw = unitYaw * j + unitYaw / 2;
-				let point = convertXYZ(tilePitch, tileYaw);
-				tileCenters.push(point);
-            }
-        }
 	}
 
 	async function initXR() {
@@ -298,12 +305,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		baseLayout = data.layout;
 		urls = data.urls;
 
-		console.log(baseAngle, baseRadius, baseFPS, baseLayout);
-		console.log(rows, cols, tileWidth, tileHeight);
-		console.log(baseUrl, urls);
+		unitTheta = Math.PI / cols;
+		unitPhi = 2 * Math.PI / rows;
 
-		let sum = rows * cols;
-		createEnhanceNode(sum);
+		unitPitch = 180 / cols;
+		unitYaw = 360 / rows;
+
+		createEnhanceNode();
+		console.log(tileCenters);
 
 		xrButton = new WebXRButton({
 			onEndSession: onEndSession,
@@ -373,22 +382,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		let glLayer = new XRWebGLLayer(session, gl);
 		session.updateRenderState({baseLayer: glLayer});
 
-		// Start from zero origin
 		loadBaseVideo();
 
 		session.requestReferenceSpace("local").then((refSpace) => {
+			// Start from zero origin
 			xrRefSpace = refSpace.getOffsetReferenceSpace(
 				new XRRigidTransform(
 					{x: 0, y: 0, z: 0},
-					{x: 0, y: 1, z: 0, w: 0},
+					{x: 0, y: 0, z: 0, w: 1},
 				)
 			);
+			console.log("onXRFrame");
 			session.requestAnimationFrame(onXRFrame);
 		});
 	}
 
 	function drawChart() {
-		let dataCount = orientationYs.length;
+		let dataCount = yaws.length;
 		for (let i = 1; i <= dataCount; i++) {
 			labels.push("" + i);
 		}
@@ -396,16 +406,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			labels: labels,
 			datasets: [
 				{
-					label: "orientation.y",
-					backgroundColor: Samples.utils.color(1),
-					borderColor: Samples.utils.color(1),
-					data: orientationYs
+					label: "yaw",
+					backgroundColor: Samples.utils.color(0),
+					borderColor: Samples.utils.color(0),
+					data: yaws
 				},
 				{
-					label: "orientation.z",
-					backgroundColor: Samples.utils.color(2),
-					borderColor: Samples.utils.color(2),
-					data: orientationZs
+					label: "pitch",
+					backgroundColor: Samples.utils.color(1),
+					borderColor: Samples.utils.color(1),
+					data: pitches
 				},
 			]
 		};
@@ -415,49 +425,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		const config = {
 			type: "line",
 			data: data,
-			options: {
-				plugins: {
-					datalabels: {
-						backgroundColor: function (context) {
-							return context.dataset.backgroundColor;
-						},
-						borderRadius: 4,
-						color: "white",
-						font: {
-							weight: "bold"
-						},
-						formatter: Math.round,
-						padding: 6
-					}
-				},
-
-				// Core options
-				aspectRatio: 5 / 3,
-				layout: {
-					padding: {
-						top: 32,
-						right: 16,
-						bottom: 16,
-						left: 8
-					}
-				},
-				elements: {
-					line: {
-						fill: false,
-						tension: 0.4
-					}
-				},
-				scales: {
-					y: {
-						stacked: true
-					}
-				}
-			}
 		};
 		const chart = new Chart(ctx, config);
 
-		console.log("MaxY=" + Math.max(...orientationYs) + ", MinY=" + Math.min(...orientationYs));
-		console.log("MaxZ=" + Math.max(...orientationZs) + ", MinZ=" + Math.min(...orientationZs));
+		console.log("StartYaw=" + yaws[0] + ", EndYaw=" + yaws[yaws.length - 1]);
+		console.log("StartPitch=" + pitches[0] + ", EndPitches=" + pitches[pitches.length - 1]);
 	}
 
 	function onSessionEnded(event) {
@@ -477,28 +449,62 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		xrSession.requestAnimationFrame(onXRFrame);
 
 		scene.updateInputSources(frame, xrRefSpace);
-        scene.drawXRFrame(frame, pose);
-
-		const radPerDeg = Math.PI / 180;
-		let radToDeg = (rad) => rad / radPerDeg;
+		scene.drawXRFrame(frame, pose);
 
 		if (pose) {
-			yaw = radToDeg(Math.acos(pose.transform.orientation.y)) * 2;
-			pitch = radToDeg(Math.asin(pose.transform.orientation.z)) * 2;
+			// init quaternion value
+			let x = pose.transform.orientation.x;
+			let y = pose.transform.orientation.y;
+			let z = pose.transform.orientation.z;
+			let w = pose.transform.orientation.w;
+			quaternion.set(x, y, z, w);
 
-			// update viewpoint x,y,z
+			// init euler value
+			euler.setFromQuaternion(quaternion, eulerOrder);
+
+			eulerToYawPitch();
+
 			let point = convertXYZ(pitch, yaw);
-			x = point.x;
-			y = point.y;
-			z = point.z;
-
-			// For draw trace graph
-			orientationYs.push(yaw);
-			orientationZs.push(pitch);
+			viewPoint.x = point.x;
+			viewPoint.y = point.y;
+			viewPoint.z = point.z;
+			console.log(viewPoint);
 
 			updateTiles();
 		}
 		scene.endFrame();
+	}
+
+	function eulerToYawPitch() {
+		let x = THREE.Math.radToDeg(euler.x);
+		let y = THREE.Math.radToDeg(euler.y);
+		let z = THREE.Math.radToDeg(euler.z);
+		if (x < -90) {
+			// 后下
+			pitch = x + 90;
+			yaw = y + 180;
+		} else if (x > 90) {
+			// 后上
+			pitch = x - 90;
+			yaw = y + 180;
+		} else {
+			// 前
+			pitch = x;
+			if (y < 0) {
+				// 右
+				yaw = -y;
+			} else {
+				// 左
+				yaw = 360 - y;
+			}
+		}
+
+		if (Math.abs(x) - Math.abs(z) < 2) {
+			// 赤道情况
+			pitch = 0;
+		}
+		yaws.push(yaw);
+		pitches.push(pitch);
 	}
 
 	function convertXYZ(pitch, yaw) {
@@ -511,8 +517,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function getCenterDistanceSquare(id) {
-        const {tileX, tileY, tileZ} = tileCenters[id];
-		return Math.pow(x - tileX, 2) + Math.pow(y - tileY, 2) + Math.pow(z - tileZ, 2);
+		const {x, y, z} = tileCenters[id];
+		return Math.pow(viewPoint.x - x, 2) + Math.pow(viewPoint.y - y, 2) + Math.pow(viewPoint.z - z, 2);
 	}
 
 	function updateTiles() {
@@ -521,14 +527,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			if (distance <= threshold) {
 				if (isSelected[i] !== true) {
 					loadTile(i);
-                }
-            } else {
+				}
+			} else {
 				if (isSelected[i] === true) {
 					unloadTile(i);
-                }
-            }
-        }
-    }
+				}
+			}
+		}
+	}
 
 	initXR();
 </script>
