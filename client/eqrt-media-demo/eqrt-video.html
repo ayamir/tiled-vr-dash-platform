@@ -100,7 +100,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let tilePositions = [];
 	let tileNodes = [];
 
-	let threshold = 0.5;
+	let threshold = 0.1;
 	let isReady = [];
 	let isSelected = [];
 	let tileCenters = [];
@@ -161,6 +161,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 				tilePositions.push({thetaStart: thetaStart, phiStart: phiStart});
 
+				let tileNode = new TileNode({
+					thetaStart: thetaStart,
+					thetaLength: unitTheta,
+					phiStart: phiStart,
+					phiLength: unitPhi,
+				})
+                tileNodes.push(tileNode);
+
 				tileCenters.push(point);
 			}
 		}
@@ -199,16 +207,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			}
 			video.load();
 			video.addEventListener("canplay", () => {
-				const {thetaStart, phiStart} = tilePositions[id];
-				scene.addNode(
-					new TileNode({
-						video: video,
-						thetaStart: thetaStart,
-						thetaLength: unitTheta,
-						phiStart: phiStart,
-						phiLength: unitPhi,
-					})
-                );
+				let tileNode = tileNodes[id];
+				tileNode.setVideo(video);
+				scene.addNode(tileNode);
 				video.play();
 			}, false)
 		}
@@ -245,6 +246,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 	function unloadTile(id) {
 		console.log("Unloading tile " + id);
+		let tileNode = tileNodes[id];
 		let video = enhanceVideos[id];
 		video.pause();
 		let dash = enhanceDash[id];
@@ -252,6 +254,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		videoMediaSync[id].pause(true);
 		isReady[id] = false;
 		isSelected[id] = false;
+		scene.remove(tileNode);
 	}
 
 	function loadBaseVideo() {

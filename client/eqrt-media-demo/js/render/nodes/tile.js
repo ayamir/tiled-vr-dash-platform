@@ -84,7 +84,6 @@ export class TileNode extends Node {
   constructor(options) {
     super();
 
-    this._video = options.video;
     this._thetaStart = options.thetaStart;
     this._thetaLength = options.thetaLength;
     this._phiStart = options.phiStart;
@@ -92,7 +91,10 @@ export class TileNode extends Node {
 
     this._displayMode = options.displayMode || 'mono';
     this._rotationY = options.rotationY || 0;
-    this._video_texture = new VideoTexture(this._video);
+  }
+
+  setVideo(video) {
+    this._video_texture = new VideoTexture(video);
   }
 
   onRendererChanged(renderer) {
