@@ -81,7 +81,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let baseVideo = null;
 	let baseVideoNeedRedraw = false;
 	let baseAngle = 0;
-	let baseRadius = 0;
 	let baseLayout = null;
 	let baseFPS = 0;
 	let baseUrl = null;
@@ -100,6 +99,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let tilePositions = [];
 	let tileNodes = [];
 
+	// TODO: test threshold
 	let threshold = 0.4;
 	let isSelected = [];
 	let tileCenters = [];
@@ -161,8 +161,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 				isSelected.push(false);
 				enhanceVideos.push(null);
 				enhanceDash.push(null);
-
-				tilePositions.push({thetaStart: thetaStart, phiStart: phiStart});
 
 				let tileNode = new TileNode({
 					thetaStart: thetaStart,
@@ -277,7 +275,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	async function initXR() {
 		let data = await myFetch("./source.json");
 		baseAngle = data.angle;
-		baseRadius = data.radius;
 		baseFPS = data.fps;
 		rows = data.rows;
 		cols = data.cols;
@@ -337,7 +334,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		if (gl) {
 			return;
 		}
-		gl = createWebGLContext({xrCompatible: true, webgl2: true});
+		gl = createWebGLContext({xrCompatible: true});
 		document.body.appendChild(gl.canvas);
 		gl.clearColor(0.0, 0, 0, 0.0);
 
@@ -514,12 +511,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function convertXYZ(pitch, yaw) {
-		if (pitch > Math.PI || pitch < -Math.PI) {
-			pitch = THREE.Math.degToRad(pitch);
-        }
-		if (yaw > Math.PI || yaw < -Math.PI) {
-			yaw = THREE.Math.degToRad(yaw);
-        }
+		pitch = THREE.Math.degToRad(pitch);
+		yaw = THREE.Math.degToRad(yaw);
+
 		let projection = radius * Math.cos(pitch);
 		let x = projection * Math.cos(yaw);
 		let y = projection * Math.sin(yaw);
