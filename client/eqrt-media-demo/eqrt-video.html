@@ -100,14 +100,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let tilePositions = [];
 	let tileNodes = [];
 
-	let threshold = 0.5;
-	let isReady = [];
+	let threshold = 0.4;
 	let isSelected = [];
 	let tileCenters = [];
 	let enhanceVideos = [];
 	let enhanceDash = [];
-	let videoMediaSync = [];
-	let timingSyncSrc = null;
 
 	// XR globals.
 	let xrButton = null;
@@ -127,12 +124,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let yaws = [];
 	let pitches = [];
 	let viewPoint = {};
+	let xs = [];
+	let ys = [];
+	let zs = [];
 
 	let eulerOrder = "XYZ";
 	let euler = new THREE.Euler(0, 0, 0, eulerOrder);
 	let quaternion = new THREE.Quaternion(0, 0, 0, 1);
 
 	let tileLoadSequence = [];
+	let tileUnloadSequence = [];
+
+	let cnt = 0;
 
 	function myFetch(source) {
 		return fetch(source).then((response) => {
@@ -155,13 +158,19 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 				let point = convertXYZ(tilePitch, tileYaw);
 
 				// init tile array
-				isReady.push(false);
 				isSelected.push(false);
 				enhanceVideos.push(null);
 				enhanceDash.push(null);
-				videoMediaSync.push(null);
 
 				tilePositions.push({thetaStart: thetaStart, phiStart: phiStart});
+
+				let tileNode = new TileNode({
+					thetaStart: thetaStart,
+					thetaLength: unitTheta,
+					phiStart: phiStart,
+					phiLength: unitPhi,
+                });
+				tileNodes.push(tileNode);
 
 				tileCenters.push(point);
 			}
@@ -192,29 +201,26 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 	function loadTile(id) {
 		console.log("Loading tile " + id);
-		if (!enhanceVideos[id]) {
+		isSelected[id] = true;
+		if (enhanceVideos[id] === null) {
 			let video = document.createElement("video");
 			initVideoNode(video, tileWidth, tileHeight);
 			enhanceVideos[id] = video;
-			video.oncanplay = () => {
-				isReady[id] = true;
-			}
 			video.load();
 			video.addEventListener("canplay", () => {
-				const {thetaStart, phiStart} = tilePositions[id];
-				scene.addNode(new TileNode({
-                    video: video,
-					thetaStart: thetaStart,
-					thetaLength: unitTheta,
-					phiStart: phiStart,
-					phiLength: unitPhi,
-                }));
-				video.play();
-				tileLoadSequence.push(id);
+				if (gl) {
+					let tileNode = tileNodes[id];
+					tileNode.setVideo(video);
+					scene.addNode(tileNode);
+					video.play();
+					video.currentTime = baseVideo.currentTime;
+					tileLoadSequence.push(id);
+					console.log("video played");
+                }
 			}, false)
 		}
 		let video = enhanceVideos[id];
-		if (!enhanceDash[id]) {
+		if (enhanceDash[id] === null) {
 			let dash = dashjs.MediaPlayer().create();
 			dash.initialize(video, urls[id], true);
 			dash.updateSettings({
@@ -229,30 +235,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			});
 			enhanceDash[id] = dash;
 		}
-		if (timingSyncSrc) {
-			if (!videoMediaSync[id]) {
-				videoMediaSync[id] = new MCorp.mediaSync(
-					enhanceVideos[id],
-					timingSyncSrc
-				);
-			} else {
-				videoMediaSync[id].pause(false);
-			}
-		}
-		isSelected[id] = true;
-		// video.currentTime = baseVideo.currentTime;
-		console.log("video played");
 	}
 
 	function unloadTile(id) {
 		console.log("Unloading tile " + id);
+		let tileNode = tileNodes[id];
 		let video = enhanceVideos[id];
 		video.pause();
 		let dash = enhanceDash[id];
 		dash.pause();
-		videoMediaSync[id].pause(true);
-		isReady[id] = false;
 		isSelected[id] = false;
+		scene.removeNode(tileNode);
+		tileUnloadSequence.push(id);
 	}
 
 	function loadBaseVideo() {
@@ -275,20 +269,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			scene.addNode(new SkyboxNode({
 				video: baseVideo,
 				displayMode: baseLayout,
-				rotationY: 1,
 			}));
 			baseVideo.play();
 		}, false);
-
-		timingSyncSrc = new TIMINGSRC.TimingObject({
-			position: baseVideo.currentTime
-		});
-
-		setInterval(function () {
-			if (baseVideo.readyState >= baseVideo.HAVE_CURRENT_DATA) {
-				baseVideoNeedRedraw = true;
-			}
-		}, 1000 / baseFPS);
 	}
 
 	async function initXR() {
@@ -399,7 +382,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function drawChart() {
-		let dataCount = yaws.length;
+		let dataCount = xs.length;
 		for (let i = 1; i <= dataCount; i++) {
 			labels.push("" + i);
 		}
@@ -407,17 +390,35 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			labels: labels,
 			datasets: [
 				{
-					label: "yaw",
+					label: "viewpoint.x",
 					backgroundColor: Samples.utils.color(0),
 					borderColor: Samples.utils.color(0),
-					data: yaws
+					data: xs
 				},
 				{
-					label: "pitch",
+					label: "viewpoint.y",
 					backgroundColor: Samples.utils.color(1),
 					borderColor: Samples.utils.color(1),
-					data: pitches
+					data: ys
 				},
+				{
+					label: "viewpoint.z",
+					backgroundColor: Samples.utils.color(2),
+					borderColor: Samples.utils.color(2),
+					data: zs
+				},
+				// {
+				// 	label: "yaw",
+				// 	backgroundColor: Samples.utils.color(0),
+				// 	borderColor: Samples.utils.color(0),
+				// 	data: yaws
+				// },
+				// {
+				// 	label: "pitch",
+				// 	backgroundColor: Samples.utils.color(1),
+				// 	borderColor: Samples.utils.color(1),
+				// 	data: pitches
+				// },
 			]
 		};
 		const canvas = document.createElement("canvas");
@@ -433,16 +434,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		console.log("StartPitch=" + pitches[0] + ", EndPitches=" + pitches[pitches.length - 1]);
 
 		console.log(tileLoadSequence);
+		console.log(tileUnloadSequence);
 	}
 
 	function onSessionEnded(event) {
-		if (event.session.isImmersive) {
-			xrButton.setSession(null);
-		}
-		xrSession = null;
-		baseVideo.pause();
-		gl = null;
-
 		drawChart();
 	}
 
@@ -472,7 +467,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			viewPoint.y = point.y;
 			viewPoint.z = point.z;
 
-			updateTiles();
+			cnt++;
+
+			// update every 1 second
+			if (cnt >= 90) {
+				cnt = 0;
+				xs.push(point.x);
+				ys.push(point.y);
+				zs.push(point.z);
+				updateTiles();
+            }
 		}
 		scene.endFrame();
 	}
@@ -510,14 +514,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	}
 
 	function convertXYZ(pitch, yaw) {
-		console.log("pitch = " + pitch + ", yaw = " + yaw);
 		if (pitch > Math.PI || pitch < -Math.PI) {
 			pitch = THREE.Math.degToRad(pitch);
         }
 		if (yaw > Math.PI || yaw < -Math.PI) {
 			yaw = THREE.Math.degToRad(yaw);
         }
-		console.log("pitch = " + pitch + ", yaw = " + yaw);
 		let projection = radius * Math.cos(pitch);
 		let x = projection * Math.cos(yaw);
 		let y = projection * Math.sin(yaw);

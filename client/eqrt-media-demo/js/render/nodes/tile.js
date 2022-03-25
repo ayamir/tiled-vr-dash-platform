@@ -84,7 +84,6 @@ export class TileNode extends Node {
   constructor(options) {
     super();
 
-    this._video_texture = new VideoTexture(options.video);
     this._thetaStart = options.thetaStart;
     this._thetaLength = options.thetaLength;
     this._phiStart = options.phiStart;
@@ -102,8 +101,8 @@ export class TileNode extends Node {
     let vertices = [];
     let indices = [];
 
-    let latSegments = 10;
-    let lonSegments = 10;
+    let latSegments = 5;
+    let lonSegments = 5;
 
     // Create the vertices/indices
     for (let iy=0; iy <= latSegments; ++iy) {
