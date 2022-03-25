@@ -84,6 +84,7 @@ export class TileNode extends Node {
   constructor(options) {
     super();
 
+    this._video_texture = new VideoTexture(options.video);
     this._thetaStart = options.thetaStart;
     this._thetaLength = options.thetaLength;
     this._phiStart = options.phiStart;
