@@ -97,6 +97,10 @@ export class TileNode extends Node {
     this._video_texture = new VideoTexture(video);
   }
 
+  haveVideo() {
+    return !!this._video_texture;
+  }
+
   onRendererChanged(renderer) {
     let vertices = [];
     let indices = [];

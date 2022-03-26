@@ -99,11 +99,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let tilePositions = [];
 	let tileNodes = [];
 
-	// TODO: test threshold
-	let threshold = 0.4;
+	let threshold = 0.8;
 	let isSelected = [];
 	let tileCenters = [];
-	let enhanceVideos = [];
+	let tileVideos = [];
 	let enhanceDash = [];
 
 	// XR globals.
@@ -132,15 +131,32 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	let euler = new THREE.Euler(0, 0, 0, eulerOrder);
 	let quaternion = new THREE.Quaternion(0, 0, 0, 1);
 
-	let tileLoadSequence = [];
-	let tileUnloadSequence = [];
-
 	let cnt = 0;
 
 	function myFetch(source) {
 		return fetch(source).then((response) => {
 			return response.json();
 		});
+	}
+
+	function initVideoNode(video, width, height) {
+		video.width = width;
+		video.height = height;
+		video.crossOrigin = "anonymous";
+		video.preload = "auto";
+		video.autoplay = false;
+		video.muted = true;
+		video.allowsInlineMediaPlayBack = true;
+		video.setAttribute("webkit-playsinline", "webkit-playsinline");
+		video.setAttribute("webkit-playsinline", true);
+		video.setAttribute("playsinline", true);
+		video.setAttribute("preload", "auto");
+		video.setAttribute("x-webkit-airplay", "allow");
+		video.setAttribute("x5-playsinline", true);
+		video.setAttribute("x5-video-player-type", "h5");
+		video.setAttribute("x5-video-player-fullscreen", false);
+		video.setAttribute("x5-video-orientation", "portrait");
+		video.setAttribute("style", "object-fit: fill");
 	}
 
 	function createEnhanceNode() {
@@ -159,7 +175,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 				// init tile array
 				isSelected.push(false);
-				enhanceVideos.push(null);
+				tileVideos.push(null);
 				enhanceDash.push(null);
 
 				let tileNode = new TileNode({
@@ -167,7 +183,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 					thetaLength: unitTheta,
 					phiStart: phiStart,
 					phiLength: unitPhi,
-                });
+				});
 				tileNodes.push(tileNode);
 
 				tileCenters.push(point);
@@ -175,49 +191,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		}
 	}
 
-	function initVideoNode(video, width, height) {
-		video.width = width;
-		video.height = height;
-		video.loop = true;
-		video.crossOrigin = "anonymous";
-		video.preload = "auto";
-		video.autoplay = false;
-		video.muted = true;
-		video.allowsInlineMediaPlayBack = true;
-		video.setAttribute("webkit-playsinline", "webkit-playsinline");
-		video.setAttribute("webkit-playsinline", true);
-		video.setAttribute("playsinline", true);
-		video.setAttribute("preload", "auto");
-		video.setAttribute("x-webkit-airplay", "allow");
-		video.setAttribute("x5-playsinline", true);
-		video.setAttribute("x5-video-player-type", "h5");
-		video.setAttribute("x5-video-player-fullscreen", false);
-		video.setAttribute("x5-video-orientation", "portrait");
-		video.setAttribute("style", "object-fit: fill");
-		video.setAttribute("loop", "loop");
-	}
-
 	function loadTile(id) {
 		console.log("Loading tile " + id);
 		isSelected[id] = true;
-		if (enhanceVideos[id] === null) {
+		let tileNode = tileNodes[id];
+		if (tileVideos[id] === null) {
 			let video = document.createElement("video");
 			initVideoNode(video, tileWidth, tileHeight);
-			enhanceVideos[id] = video;
+			tileVideos[id] = video;
 			video.load();
-			video.addEventListener("canplay", () => {
-				if (gl) {
-					let tileNode = tileNodes[id];
+			video.oncanplay = () => {
+				if (isSelected[id]) {
 					tileNode.setVideo(video);
 					scene.addNode(tileNode);
 					video.play();
 					video.currentTime = baseVideo.currentTime;
-					tileLoadSequence.push(id);
-					console.log("video played");
-                }
-			}, false)
+				}
+            };
 		}
-		let video = enhanceVideos[id];
+		let video = tileVideos[id];
 		if (enhanceDash[id] === null) {
 			let dash = dashjs.MediaPlayer().create();
 			dash.initialize(video, urls[id], true);
@@ -233,23 +225,26 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			});
 			enhanceDash[id] = dash;
 		}
+		if (tileNode.haveVideo() && video.paused) {
+			video.play();
+			video.currentTime = baseVideo.currentTime;
+			scene.addNode(tileNode);
+		}
 	}
 
 	function unloadTile(id) {
 		console.log("Unloading tile " + id);
 		let tileNode = tileNodes[id];
-		let video = enhanceVideos[id];
-		video.pause();
-		let dash = enhanceDash[id];
-		dash.pause();
+		let video = tileVideos[id];
+		if (video) {
+			video.pause();
+		}
 		isSelected[id] = false;
 		scene.removeNode(tileNode);
-		tileUnloadSequence.push(id);
 	}
 
 	function loadBaseVideo() {
 		baseVideo = document.createElement("video");
-		baseVideo.loop = true;
 		baseVideo.crossOrigin = "anonymous";
 		baseVideo.preload = "auto";
 		baseVideo.autoload = true;
@@ -263,13 +258,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			longFormContentDurationThreshold: 200
 		});
 		baseVideo.load();
-		baseVideo.addEventListener("canplay", () => {
+		baseVideo.oncanplay = () => {
 			scene.addNode(new SkyboxNode({
 				video: baseVideo,
 				displayMode: baseLayout,
 			}));
 			baseVideo.play();
-		}, false);
+		}
 	}
 
 	async function initXR() {
@@ -293,7 +288,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		unitYaw = 360 / rows;
 
 		createEnhanceNode();
-		console.log(tileCenters);
 
 		xrButton = new WebXRButton({
 			onEndSession: onEndSession,
@@ -328,6 +322,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		}
 		baseVideo.pause();
 		gl = null;
+	}
+
+	function onSessionEnded() {
+		drawChart();
 	}
 
 	function initGL() {
@@ -429,20 +427,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 		console.log("StartYaw=" + yaws[0] + ", EndYaw=" + yaws[yaws.length - 1]);
 		console.log("StartPitch=" + pitches[0] + ", EndPitches=" + pitches[pitches.length - 1]);
-
-		console.log(tileLoadSequence);
-		console.log(tileUnloadSequence);
-	}
-
-	function onSessionEnded(event) {
-		drawChart();
 	}
 
 	function onXRFrame(time, frame) {
 		let pose = frame.getViewerPose(xrRefSpace);
 		scene.startFrame();
-		xrSession.requestAnimationFrame(onXRFrame);
 
+		xrSession.requestAnimationFrame(onXRFrame);
 		scene.updateInputSources(frame, xrRefSpace);
 		scene.drawXRFrame(frame, pose);
 
@@ -473,7 +464,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 				ys.push(point.y);
 				zs.push(point.z);
 				updateTiles();
-            }
+			}
 		}
 		scene.endFrame();
 	}
