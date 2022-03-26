@@ -3,6 +3,7 @@ import cmder
 import utils
 import os
 from pathlib import Path
+from utils import host_ip
 
 
 def dash_mpd(video_output_dir: str, profile: str = "on-demand") -> None:
@@ -99,10 +100,10 @@ def generate_json_webxr(
     tile_width: int,
     tile_height: int,
     video_output_dir: str,
-    url_prefix: str = "https://192.168.1.129/files/avc",
+    url_prefix: str = "https://" + host_ip + "/files/avc",
 ):
     url_suffix = "/output/stream.mpd"
-    dest = utils.cwd + "/../client/eqrt-media-demo/source.json"
+    dest = utils.cwd + "/../../client/eqrt-media-demo/source.json"
 
     urls = []
 
@@ -111,8 +112,6 @@ def generate_json_webxr(
             urls.append(url_prefix + "/tile_" + str(j) + "_" + str(i) + url_suffix)
 
     obj = {
-        "angle": 360,
-        "radius": 10,
         "fps": 30,
         "rows": rows,
         "cols": cols,
@@ -121,7 +120,7 @@ def generate_json_webxr(
         "baseHeight": base_height,
         "tileWidth": tile_width,
         "tileHeight": tile_height,
-        "layout": "stereo",
+        "layout": "mono",
         "urls": urls,
     }
 
