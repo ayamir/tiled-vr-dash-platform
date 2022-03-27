@@ -448,8 +448,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 			// init euler value
 			euler.setFromQuaternion(quaternion, eulerOrder);
 
+			// Convert rotation angle to polar angle(pitch) and azimuthal angle(yaw)
 			eulerToYawPitch();
 
+			// Convert yaw and pitch to XYZ
 			let point = convertXYZ(pitch, yaw);
 			viewPoint.x = point.x;
 			viewPoint.y = point.y;
@@ -474,27 +476,27 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		let y = THREE.Math.radToDeg(euler.y);
 		let z = THREE.Math.radToDeg(euler.z);
 		if (x < -90) {
-			// 后下
+			// back down
 			pitch = x + 90;
 			yaw = y + 180;
 		} else if (x > 90) {
-			// 后上
+			// back up
 			pitch = x - 90;
 			yaw = y + 180;
 		} else {
-			// 前
+			// front
 			pitch = x;
 			if (y < 0) {
-				// 右
+				// front right
 				yaw = -y;
 			} else {
-				// 左
+				// front left
 				yaw = 360 - y;
 			}
 		}
 
 		if (Math.abs(x) - Math.abs(z) < 2) {
-			// 赤道情况
+			// equator
 			pitch = 0;
 		}
 		yaws.push(yaw);
@@ -515,10 +517,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 	function getCenterDistanceSquare(id) {
 		const {x, y, z} = tileCenters[id];
+		// TODO: more precise FoV representation
 		return Math.pow(viewPoint.x - x, 2) + Math.pow(viewPoint.y - y, 2) + Math.pow(viewPoint.z - z, 2);
 	}
 
 	function updateTiles() {
+		// Iterate all tiles' centers
 		for (let i = 0; i < rows * cols; i++) {
 			let distance = getCenterDistanceSquare(i);
 			if (distance <= threshold) {
