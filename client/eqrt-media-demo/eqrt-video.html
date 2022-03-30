@@ -66,478 +66,527 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 </main>
 <script type="module">
 
-	import {WebXRButton} from "./js/util/webxr-button.js";
-	import {Scene} from "./js/render/scenes/scene.js";
-	import {
-		Renderer,
-		createWebGLContext
-	} from "./js/render/core/renderer.js";
-	import {SkyboxNode} from "./js/render/nodes/skybox.js";
-	import {TileNode} from "./js/render/nodes/tile.js"
+    import {WebXRButton} from "./js/util/webxr-button.js";
+    import {Scene} from "./js/render/scenes/scene.js";
+    import {
+        Renderer,
+        createWebGLContext
+    } from "./js/render/core/renderer.js";
+    import {SkyboxNode} from "./js/render/nodes/skybox.js";
+    import {TileNode} from "./js/render/nodes/tile.js"
 
-	const {XRWebGLLayer, XRRigidTransform} = window;
+    const {XRWebGLLayer, XRRigidTransform} = window;
 
-	let baseDash = null;
-	let baseVideo = null;
-	let baseVideoNeedRedraw = false;
-	let baseAngle = 0;
-	let baseLayout = null;
-	let baseFPS = 0;
-	let baseUrl = null;
-	let baseWidth = 0;
-	let baseHeight = 0;
-	let tileWidth = 0;
-	let tileHeight = 0;
-	let rows = 0;
-	let cols = 0;
-	let urls = null;
+    let baseDash = null;
+    let baseVideo = null;
+    let baseVideoNeedRedraw = false;
+    let baseAngle = 0;
+    let baseLayout = null;
+    let baseFPS = 0;
+    let baseUrl = null;
+    let baseWidth = 0;
+    let baseHeight = 0;
+    let tileWidth = 0;
+    let tileHeight = 0;
+    let rows = 0;
+    let cols = 0;
+    let urls = null;
 
-	let unitTheta = 0;
-	let unitPhi = 0;
-	let unitPitch = 0;
-	let unitYaw = 0;
-	let tilePositions = [];
-	let tileNodes = [];
+    let unitTheta = 0;
+    let unitPhi = 0;
+    let unitPitch = 0;
+    let unitYaw = 0;
+    let tilePositions = [];
+    let tileNodes = [];
 
-	let threshold = 0.8;
-	let isSelected = [];
-	let tileCenters = [];
-	let tileVideos = [];
-	let enhanceDash = [];
+    let threshold = 0.8;
+    let isSelected = [];
+    let tileCenters = [];
+    let tileVideos = [];
+    let enhanceDash = [];
 
-	// XR globals.
-	let xrButton = null;
-	let xrSession = null;
-	let xrRefSpace = null;
-	let stereoUtil = null;
+    // XR globals.
+    let xrButton = null;
+    let xrSession = null;
+    let xrRefSpace = null;
+    let stereoUtil = null;
 
-	// WebGL scene globals.
-	let gl = null;
-	let renderer = null;
-	let scene = new Scene();
+    // WebGL scene globals.
+    let gl = null;
+    let renderer = null;
+    let scene = new Scene();
 
-	let labels = [];
-	let radius = 1.0;
-	let yaw = 0;
-	let pitch = 0;
-	let yaws = [];
-	let pitches = [];
-	let viewPoint = {};
-	let xs = [];
-	let ys = [];
-	let zs = [];
+    let labels = [];
+    let radius = 1.0;
+    let yaw = 0;
+    let pitch = 0;
+    let yaws = [];
+    let pitches = [];
+    let viewPoint = {};
+    let xs = [];
+    let ys = [];
+    let zs = [];
 
-	let eulerOrder = "XYZ";
-	let euler = new THREE.Euler(0, 0, 0, eulerOrder);
-	let quaternion = new THREE.Quaternion(0, 0, 0, 1);
+    let eulerOrder = "XYZ";
+    let euler = new THREE.Euler(0, 0, 0, eulerOrder);
+    let quaternion = new THREE.Quaternion(0, 0, 0, 1);
+    let sampleTimes = 0;
+    let isPred = false;
+    let pointToServer = [];
+    let predPoint = {};
+    let predictedQuaternion = new THREE.Quaternion(0, 0, 0, 1);
+    let predictedEuler = new THREE.Euler(0, 0, 0, eulerOrder);
 
-	let cnt = 0;
+    let cnt = 0;
 
-	function myFetch(source) {
-		return fetch(source).then((response) => {
-			return response.json();
-		});
-	}
+    function myFetch(source) {
+        return fetch(source).then((response) => {
+            return response.json();
+        });
+    }
 
-	function initVideoNode(video, width, height) {
-		video.width = width;
-		video.height = height;
-		video.crossOrigin = "anonymous";
-		video.preload = "auto";
-		video.autoplay = false;
-		video.muted = true;
-		video.allowsInlineMediaPlayBack = true;
-		video.setAttribute("webkit-playsinline", "webkit-playsinline");
-		video.setAttribute("webkit-playsinline", true);
-		video.setAttribute("playsinline", true);
-		video.setAttribute("preload", "auto");
-		video.setAttribute("x-webkit-airplay", "allow");
-		video.setAttribute("x5-playsinline", true);
-		video.setAttribute("x5-video-player-type", "h5");
-		video.setAttribute("x5-video-player-fullscreen", false);
-		video.setAttribute("x5-video-orientation", "portrait");
-		video.setAttribute("style", "object-fit: fill");
-	}
+    function initVideoNode(video, width, height) {
+        video.width = width;
+        video.height = height;
+        video.crossOrigin = "anonymous";
+        video.preload = "auto";
+        video.autoplay = false;
+        video.muted = true;
+        video.allowsInlineMediaPlayBack = true;
+        video.setAttribute("webkit-playsinline", "webkit-playsinline");
+        video.setAttribute("webkit-playsinline", true);
+        video.setAttribute("playsinline", true);
+        video.setAttribute("preload", "auto");
+        video.setAttribute("x-webkit-airplay", "allow");
+        video.setAttribute("x5-playsinline", true);
+        video.setAttribute("x5-video-player-type", "h5");
+        video.setAttribute("x5-video-player-fullscreen", false);
+        video.setAttribute("x5-video-orientation", "portrait");
+        video.setAttribute("style", "object-fit: fill");
+    }
 
-	function createEnhanceNode() {
-		console.log("initializing tile position and center...");
-		for (let i = 0; i < cols; i++) {
-			let thetaStart = i * unitTheta;
+    function createEnhanceNode() {
+        console.log("initializing tile position and center...");
+        for (let i = 0; i < cols; i++) {
+            let thetaStart = i * unitTheta;
 
-			let tilePitch = unitPitch * i + unitPitch / 2;
-			tilePitch = 90 - tilePitch;
+            let tilePitch = unitPitch * i + unitPitch / 2;
+            tilePitch = 90 - tilePitch;
 
-			for (let j = 0; j < rows; j++) {
-				let phiStart = j * unitPhi;
+            for (let j = 0; j < rows; j++) {
+                let phiStart = j * unitPhi;
 
-				let tileYaw = unitYaw * j + unitYaw / 2;
-				let point = convertXYZ(tilePitch, tileYaw);
+                let tileYaw = unitYaw * j + unitYaw / 2;
+                let point = convertXYZ(tileYaw, tilePitch);
 
-				// init tile array
-				isSelected.push(false);
-				tileVideos.push(null);
-				enhanceDash.push(null);
+                // init tile array
+                isSelected.push(false);
+                tileVideos.push(null);
+                enhanceDash.push(null);
 
-				let tileNode = new TileNode({
-					thetaStart: thetaStart,
-					thetaLength: unitTheta,
-					phiStart: phiStart,
-					phiLength: unitPhi,
-				});
-				tileNodes.push(tileNode);
+                let tileNode = new TileNode({
+                    thetaStart: thetaStart,
+                    thetaLength: unitTheta,
+                    phiStart: phiStart,
+                    phiLength: unitPhi,
+                });
+                tileNodes.push(tileNode);
 
-				tileCenters.push(point);
-			}
-		}
-	}
+                tileCenters.push(point);
+            }
+        }
+    }
 
-	function loadTile(id) {
-		console.log("Loading tile " + id);
-		isSelected[id] = true;
-		let tileNode = tileNodes[id];
-		if (tileVideos[id] === null) {
-			let video = document.createElement("video");
-			initVideoNode(video, tileWidth, tileHeight);
-			tileVideos[id] = video;
-			video.load();
-			video.oncanplay = () => {
-				if (isSelected[id]) {
-					tileNode.setVideo(video);
-					scene.addNode(tileNode);
-					video.play();
-					video.currentTime = baseVideo.currentTime;
-				}
+    function loadTile(id) {
+        console.log("Loading tile " + id);
+        isSelected[id] = true;
+        let tileNode = tileNodes[id];
+        if (tileVideos[id] === null) {
+            let video = document.createElement("video");
+            initVideoNode(video, tileWidth, tileHeight);
+            tileVideos[id] = video;
+            video.load();
+            video.oncanplay = () => {
+                if (isSelected[id]) {
+                    tileNode.setVideo(video);
+                    scene.addNode(tileNode);
+                    video.play();
+                    video.currentTime = baseVideo.currentTime;
+                }
             };
-		}
-		let video = tileVideos[id];
-		if (enhanceDash[id] === null) {
-			let dash = dashjs.MediaPlayer().create();
-			dash.initialize(video, urls[id], true);
-			dash.updateSettings({
-				streaming: {
-					stableBufferTime: 3, // 一般质量下，稳定期的buffer大小
-					bufferTimeAtTopQuality: 5, // 如果使用的是最高质量，给予其更高的buffer长度
-					bufferTimeAtTopQualityLongForm: 20, // 当内容被判断为LongForm时，最高质量给予的buffer长度
-					longFormContentDurationThreshold: 200, // 多长被判断为long form内容
-					scheduleWhilePaused: false, // 当播放pause时，阻止后台下载
-					fastSwitchEnabled: true // 当视频的quality发生up时，清空之后的buffer，换取最新版本的内容
-				}
-			});
-			enhanceDash[id] = dash;
-		}
-		if (tileNode.haveVideo() && video.paused) {
-			video.play();
-			video.currentTime = baseVideo.currentTime;
-			scene.addNode(tileNode);
-		}
-	}
+        }
+        let video = tileVideos[id];
+        if (enhanceDash[id] === null) {
+            let dash = dashjs.MediaPlayer().create();
+            dash.initialize(video, urls[id], true);
+            dash.updateSettings({
+                streaming: {
+                    stableBufferTime: 3, // 一般质量下，稳定期的buffer大小
+                    bufferTimeAtTopQuality: 5, // 如果使用的是最高质量，给予其更高的buffer长度
+                    bufferTimeAtTopQualityLongForm: 20, // 当内容被判断为LongForm时，最高质量给予的buffer长度
+                    longFormContentDurationThreshold: 200, // 多长被判断为long form内容
+                    scheduleWhilePaused: false, // 当播放pause时，阻止后台下载
+                    fastSwitchEnabled: true // 当视频的quality发生up时，清空之后的buffer，换取最新版本的内容
+                }
+            });
+            enhanceDash[id] = dash;
+        }
+        if (tileNode.haveVideo() && video.paused) {
+            video.play();
+            video.currentTime = baseVideo.currentTime;
+            scene.addNode(tileNode);
+        }
+    }
 
-	function unloadTile(id) {
-		console.log("Unloading tile " + id);
-		let tileNode = tileNodes[id];
-		let video = tileVideos[id];
-		if (video) {
-			video.pause();
-		}
-		isSelected[id] = false;
-		scene.removeNode(tileNode);
-	}
+    function unloadTile(id) {
+        console.log("Unloading tile " + id);
+        let tileNode = tileNodes[id];
+        let video = tileVideos[id];
+        if (video) {
+            video.pause();
+        }
+        isSelected[id] = false;
+        scene.removeNode(tileNode);
+    }
 
-	function loadBaseVideo() {
-		baseVideo = document.createElement("video");
-		baseVideo.crossOrigin = "anonymous";
-		baseVideo.preload = "auto";
-		baseVideo.autoload = true;
-		baseDash = dashjs.MediaPlayer().create();
-		baseDash.initialize(baseVideo, baseUrl, true);
-		baseDash.updateSettings({
-			fastSwitchEnabled: true, // 黑块率较高的清空下，基础流也是需要提升质量的
-			stableBufferTime: 30, // buffer尽可能的长
-			bufferTimeAtTopQuality: 60, // 最高质量不用担心rebuffer，所以可以尽可能的给较长的buffer
-			bufferTimeAtTopQualityLongForm: 120,
-			longFormContentDurationThreshold: 200
-		});
-		baseVideo.load();
-		baseVideo.oncanplay = () => {
-			scene.addNode(new SkyboxNode({
-				video: baseVideo,
-				displayMode: baseLayout,
-			}));
-			baseVideo.play();
-		}
-	}
+    function loadBaseVideo() {
+        baseVideo = document.createElement("video");
+        baseVideo.crossOrigin = "anonymous";
+        baseVideo.preload = "auto";
+        baseVideo.autoload = true;
+        baseDash = dashjs.MediaPlayer().create();
+        baseDash.initialize(baseVideo, baseUrl, true);
+        baseDash.updateSettings({
+            fastSwitchEnabled: true, // 黑块率较高的清空下，基础流也是需要提升质量的
+            stableBufferTime: 30, // buffer尽可能的长
+            bufferTimeAtTopQuality: 60, // 最高质量不用担心rebuffer，所以可以尽可能的给较长的buffer
+            bufferTimeAtTopQualityLongForm: 120,
+            longFormContentDurationThreshold: 200
+        });
+        baseVideo.load();
+        baseVideo.oncanplay = () => {
+            scene.addNode(new SkyboxNode({
+                video: baseVideo,
+                displayMode: baseLayout,
+            }));
+            baseVideo.play();
+        }
+    }
 
-	async function initXR() {
-		let data = await myFetch("./source.json");
-		baseAngle = data.angle;
-		baseFPS = data.fps;
-		rows = data.rows;
-		cols = data.cols;
-		baseUrl = data.baseUrl;
-		baseWidth = data.baseWidth;
-		baseHeight = data.baseHeight;
-		tileWidth = data.tileWidth;
-		tileHeight = data.tileHeight;
-		baseLayout = data.layout;
-		urls = data.urls;
+    async function initXR() {
+        let data = await myFetch("./source.json");
+        baseAngle = data.angle;
+        baseFPS = data.fps;
+        rows = data.rows;
+        cols = data.cols;
+        baseUrl = data.baseUrl;
+        baseWidth = data.baseWidth;
+        baseHeight = data.baseHeight;
+        tileWidth = data.tileWidth;
+        tileHeight = data.tileHeight;
+        baseLayout = data.layout;
+        urls = data.urls;
 
-		unitTheta = Math.PI / cols;
-		unitPhi = 2 * Math.PI / rows;
+        unitTheta = Math.PI / cols;
+        unitPhi = 2 * Math.PI / rows;
 
-		unitPitch = 180 / cols;
-		unitYaw = 360 / rows;
+        unitPitch = 180 / cols;
+        unitYaw = 360 / rows;
 
-		createEnhanceNode();
+        createEnhanceNode();
 
-		xrButton = new WebXRButton({
-			onEndSession: onEndSession,
-			onRequestSession: onRequestSession,
-		});
-		document.querySelector("main").appendChild(xrButton.domElement);
+        xrButton = new WebXRButton({
+            onEndSession: onEndSession,
+            onRequestSession: onRequestSession,
+        });
+        document.querySelector("main").appendChild(xrButton.domElement);
 
-		if (navigator.xr) {
-			navigator.xr
-				.isSessionSupported("immersive-vr")
-				.then((supported) => {
-					xrButton.enabled = supported;
-				});
-		}
-	}
+        if (navigator.xr) {
+            navigator.xr
+                .isSessionSupported("immersive-vr")
+                .then((supported) => {
+                    xrButton.enabled = supported;
+                });
+        }
+    }
 
-	function onRequestSession() {
-		if (!xrSession) {
-			navigator.xr
-				.requestSession("immersive-vr", {
-					requiredFeatures: ["local"]
-				})
-				.then(onSessionStarted);
-		} else {
-			onEndSession();
-		}
-	}
+    function onRequestSession() {
+        if (!xrSession) {
+            navigator.xr
+                .requestSession("immersive-vr", {
+                    requiredFeatures: ["local"]
+                })
+                .then(onSessionStarted);
+        } else {
+            onEndSession();
+        }
+    }
 
-	function onEndSession() {
-		if (xrSession) {
-			xrSession.end();
-		}
-		baseVideo.pause();
-		gl = null;
-	}
+    function onEndSession() {
+        if (xrSession) {
+            xrSession.end();
+        }
+        baseVideo.pause();
+        gl = null;
+    }
 
-	function onSessionEnded() {
-		drawChart();
-	}
+    function onSessionEnded() {
+        drawChart();
+    }
 
-	function initGL() {
-		if (gl) {
-			return;
-		}
-		gl = createWebGLContext({xrCompatible: true});
-		document.body.appendChild(gl.canvas);
-		gl.clearColor(0.0, 0, 0, 0.0);
+    function initGL() {
+        if (gl) {
+            return;
+        }
+        gl = createWebGLContext({xrCompatible: true});
+        document.body.appendChild(gl.canvas);
+        gl.clearColor(0.0, 0, 0, 0.0);
 
-		function onResize() {
-			gl.canvas.width =
-				gl.canvas.clientWidth * window.devicePixelRatio;
-			gl.canvas.height =
-				gl.canvas.clientHeight * window.devicePixelRatio;
-		}
+        function onResize() {
+            gl.canvas.width =
+                gl.canvas.clientWidth * window.devicePixelRatio;
+            gl.canvas.height =
+                gl.canvas.clientHeight * window.devicePixelRatio;
+        }
 
-		window.addEventListener("resize", onResize);
-		onResize();
+        window.addEventListener("resize", onResize);
+        onResize();
 
-		renderer = new Renderer(gl);
-		scene.setRenderer(renderer);
-	}
+        renderer = new Renderer(gl);
+        scene.setRenderer(renderer);
+    }
 
-	function onSessionStarted(session) {
-		xrSession = session;
-		scene.inputRenderer.useProfileControllerMeshes(session);
-		session.addEventListener("end", onSessionEnded);
+    function onSessionStarted(session) {
+        xrSession = session;
+        scene.inputRenderer.useProfileControllerMeshes(session);
+        session.addEventListener("end", onSessionEnded);
 
-		initGL();
-		scene.inputRenderer.useProfileControllerMeshes(session);
+        initGL();
+        scene.inputRenderer.useProfileControllerMeshes(session);
 
-		let glLayer = new XRWebGLLayer(session, gl);
-		session.updateRenderState({baseLayer: glLayer});
+        let glLayer = new XRWebGLLayer(session, gl);
+        session.updateRenderState({baseLayer: glLayer});
 
-		loadBaseVideo();
+        loadBaseVideo();
 
-		session.requestReferenceSpace("local").then((refSpace) => {
-			// Start from zero origin
-			xrRefSpace = refSpace.getOffsetReferenceSpace(
-				new XRRigidTransform(
-					{x: 0, y: 0, z: 0},
-					{x: 0, y: 0, z: 0, w: 1},
-				)
-			);
-			console.log("onXRFrame");
-			session.requestAnimationFrame(onXRFrame);
-		});
-	}
+        session.requestReferenceSpace("local").then((refSpace) => {
+            // Start from zero origin
+            xrRefSpace = refSpace.getOffsetReferenceSpace(
+                new XRRigidTransform(
+                    {x: 0, y: 0, z: 0},
+                    {x: 0, y: 0, z: 0, w: 1},
+                )
+            );
+            console.log("onXRFrame");
+            session.requestAnimationFrame(onXRFrame);
+        });
+    }
 
-	function drawChart() {
-		let dataCount = xs.length;
-		for (let i = 1; i <= dataCount; i++) {
-			labels.push("" + i);
-		}
-		let data = {
-			labels: labels,
-			datasets: [
-				{
-					label: "viewpoint.x",
-					backgroundColor: Samples.utils.color(0),
-					borderColor: Samples.utils.color(0),
-					data: xs
-				},
-				{
-					label: "viewpoint.y",
-					backgroundColor: Samples.utils.color(1),
-					borderColor: Samples.utils.color(1),
-					data: ys
-				},
-				{
-					label: "viewpoint.z",
-					backgroundColor: Samples.utils.color(2),
-					borderColor: Samples.utils.color(2),
-					data: zs
-				},
-				// {
-				// 	label: "yaw",
-				// 	backgroundColor: Samples.utils.color(0),
-				// 	borderColor: Samples.utils.color(0),
-				// 	data: yaws
-				// },
-				// {
-				// 	label: "pitch",
-				// 	backgroundColor: Samples.utils.color(1),
-				// 	borderColor: Samples.utils.color(1),
-				// 	data: pitches
-				// },
-			]
-		};
-		const canvas = document.createElement("canvas");
-		document.querySelector("main").appendChild(canvas);
-		const ctx = canvas.getContext("2d");
-		const config = {
-			type: "line",
-			data: data,
-		};
-		const chart = new Chart(ctx, config);
+    function drawChart() {
+        let dataCount = xs.length;
+        for (let i = 1; i <= dataCount; i++) {
+            labels.push("" + i);
+        }
+        let data = {
+            labels: labels,
+            datasets: [
+                {
+                    label: "viewpoint.x",
+                    backgroundColor: Samples.utils.color(0),
+                    borderColor: Samples.utils.color(0),
+                    data: xs
+                },
+                {
+                    label: "viewpoint.y",
+                    backgroundColor: Samples.utils.color(1),
+                    borderColor: Samples.utils.color(1),
+                    data: ys
+                },
+                {
+                    label: "viewpoint.z",
+                    backgroundColor: Samples.utils.color(2),
+                    borderColor: Samples.utils.color(2),
+                    data: zs
+                },
+                // {
+                // 	label: "yaw",
+                // 	backgroundColor: Samples.utils.color(0),
+                // 	borderColor: Samples.utils.color(0),
+                // 	data: yaws
+                // },
+                // {
+                // 	label: "pitch",
+                // 	backgroundColor: Samples.utils.color(1),
+                // 	borderColor: Samples.utils.color(1),
+                // 	data: pitches
+                // },
+            ]
+        };
+        const canvas = document.createElement("canvas");
+        document.querySelector("main").appendChild(canvas);
+        const ctx = canvas.getContext("2d");
+        const config = {
+            type: "line",
+            data: data,
+        };
+        const chart = new Chart(ctx, config);
 
-		console.log("StartYaw=" + yaws[0] + ", EndYaw=" + yaws[yaws.length - 1]);
-		console.log("StartPitch=" + pitches[0] + ", EndPitches=" + pitches[pitches.length - 1]);
-	}
+        console.log("StartYaw=" + yaws[0] + ", EndYaw=" + yaws[yaws.length - 1]);
+        console.log("StartPitch=" + pitches[0] + ", EndPitches=" + pitches[pitches.length - 1]);
+    }
 
-	function onXRFrame(time, frame) {
-		let pose = frame.getViewerPose(xrRefSpace);
-		scene.startFrame();
+    async function postData() {
+        let predictUrl = "https://10.112.79.143:5000/predict";
+        const response = await fetch(predictUrl, {
+            method: "POST",
+            mode: "cors",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(pointToServer)
+        });
+        return response.json();
+    }
 
-		xrSession.requestAnimationFrame(onXRFrame);
-		scene.updateInputSources(frame, xrRefSpace);
-		scene.drawXRFrame(frame, pose);
+    function sendData() {
+        postData().then(data => {
+            let rawPredicted = data[0];
+            console.log(rawPredicted);
+            isPred = true;
+        })
+        sampleTimes = 0;
+        pointToServer = [];
+    }
 
-		if (pose) {
-			// init quaternion value
-			let x = pose.transform.orientation.x;
-			let y = pose.transform.orientation.y;
-			let z = pose.transform.orientation.z;
-			let w = pose.transform.orientation.w;
-			quaternion.set(x, y, z, w);
+    function onXRFrame(time, frame) {
+        let pose = frame.getViewerPose(xrRefSpace);
+        scene.startFrame();
 
-			// init euler value
-			euler.setFromQuaternion(quaternion, eulerOrder);
+        xrSession.requestAnimationFrame(onXRFrame);
+        scene.updateInputSources(frame, xrRefSpace);
+        scene.drawXRFrame(frame, pose);
 
-			// Convert rotation angle to polar angle(pitch) and azimuthal angle(yaw)
-			eulerToYawPitch();
+        if (pose) {
+            // init quaternion value
+            let x = pose.transform.orientation.x;
+            let y = pose.transform.orientation.y;
+            let z = pose.transform.orientation.z;
+            let w = pose.transform.orientation.w;
+            quaternion.set(x, y, z, w);
 
-			// Convert yaw and pitch to XYZ
-			let point = convertXYZ(pitch, yaw);
-			viewPoint.x = point.x;
-			viewPoint.y = point.y;
-			viewPoint.z = point.z;
+            sampleTimes++;
+            if (sampleTimes % 6 === 0) {
+                pointToServer.push(x);
+                pointToServer.push(y);
+                pointToServer.push(z);
+                pointToServer.push(w);
+                if (sampleTimes === 90) {
+                    sendData();
+                }
+            }
 
-			cnt++;
+            // init euler value
+            euler.setFromQuaternion(quaternion, eulerOrder);
 
-			// update every 1 second
-			if (cnt >= 90) {
-				cnt = 0;
-				xs.push(point.x);
-				ys.push(point.y);
-				zs.push(point.z);
-				updateTiles();
-			}
-		}
-		scene.endFrame();
-	}
+            // Convert rotation angle to polar angle(pitch) and azimuthal angle(yaw)
+            let angles = eulerToYawPitch();
+            yaw = angles.yaw;
+            pitch = angles.pitch;
+            yaws.push(yaw);
+            pitches.push(pitch);
 
-	function eulerToYawPitch() {
-		let x = THREE.Math.radToDeg(euler.x);
-		let y = THREE.Math.radToDeg(euler.y);
-		let z = THREE.Math.radToDeg(euler.z);
-		if (x < -90) {
-			// back down
-			pitch = x + 90;
-			yaw = y + 180;
-		} else if (x > 90) {
-			// back up
-			pitch = x - 90;
-			yaw = y + 180;
-		} else {
-			// front
-			pitch = x;
-			if (y < 0) {
-				// front right
-				yaw = -y;
-			} else {
-				// front left
-				yaw = 360 - y;
-			}
-		}
+            // Convert yaw and pitch to XYZ
+            let point = convertXYZ(yaw, pitch);
+            viewPoint.x = point.x;
+            viewPoint.y = point.y;
+            viewPoint.z = point.z;
 
-		if (Math.abs(x) - Math.abs(z) < 2) {
-			// equator
-			pitch = 0;
-		}
-		yaws.push(yaw);
-		pitches.push(pitch);
-	}
+            cnt++;
 
-	function convertXYZ(pitch, yaw) {
-		pitch = THREE.Math.degToRad(pitch);
-		yaw = THREE.Math.degToRad(yaw);
+            // update every 1 second
+            if (cnt >= 90) {
+                cnt = 0;
+                xs.push(point.x);
+                ys.push(point.y);
+                zs.push(point.z);
+                updateTiles();
+            }
+        }
+        scene.endFrame();
+    }
 
-		let projection = radius * Math.cos(pitch);
-		let x = projection * Math.cos(yaw);
-		let y = projection * Math.sin(yaw);
-		let z = radius * Math.sin(pitch);
+    function eulerToYawPitch() {
+        let yaw, pitch = 0;
+        let x = THREE.Math.radToDeg(euler.x);
+        let y = THREE.Math.radToDeg(euler.y);
+        let z = THREE.Math.radToDeg(euler.z);
+        if (x < -90) {
+            // back down
+            pitch = x + 90;
+            yaw = y + 180;
+        } else if (x > 90) {
+            // back up
+            pitch = x - 90;
+            yaw = y + 180;
+        } else {
+            // front
+            pitch = x;
+            if (y < 0) {
+                // front right
+                yaw = -y;
+            } else {
+                // front left
+                yaw = 360 - y;
+            }
+        }
 
-		return {x: x, y: y, z: z};
-	}
+        if (Math.abs(x) - Math.abs(z) < 2) {
+            // equator
+            pitch = 0;
+        }
+        return {yaw: yaw, pitch: pitch};
+    }
 
-	function getCenterDistanceSquare(id) {
-		const {x, y, z} = tileCenters[id];
-		// TODO: more precise FoV representation
-		return Math.pow(viewPoint.x - x, 2) + Math.pow(viewPoint.y - y, 2) + Math.pow(viewPoint.z - z, 2);
-	}
+    function convertXYZ(yaw, pitch) {
+        pitch = THREE.Math.degToRad(pitch);
+        yaw = THREE.Math.degToRad(yaw);
 
-	function updateTiles() {
-		// Iterate all tiles' centers
-		for (let i = 0; i < rows * cols; i++) {
-			let distance = getCenterDistanceSquare(i);
-			if (distance <= threshold) {
-				if (isSelected[i] !== true) {
-					loadTile(i);
-				}
-			} else {
-				if (isSelected[i] === true) {
-					unloadTile(i);
-				}
-			}
-		}
-	}
+        let projection = radius * Math.cos(pitch);
+        let x = projection * Math.cos(yaw);
+        let y = projection * Math.sin(yaw);
+        let z = radius * Math.sin(pitch);
 
-	initXR();
+        return {x: x, y: y, z: z};
+    }
+
+    function getCenterDistanceSquare(id) {
+        const {x, y, z} = tileCenters[id];
+        // TODO: more precise FoV representation
+        if (!isPred) {
+            return Math.pow(viewPoint.x - x, 2) + Math.pow(viewPoint.y - y, 2) + Math.pow(viewPoint.z - z, 2);
+        } else {
+            isPred = false;
+            return Math.pow(predPoint.x - x, 2) + Math.pow(predPoint.y - y, 2) + Math.pow(predPoint.z - z, 2);
+        }
+    }
+
+    function updateTiles() {
+        // Iterate all tiles' centers
+        for (let i = 0; i < rows * cols; i++) {
+            let distance = getCenterDistanceSquare(i);
+            if (distance <= threshold) {
+                if (isSelected[i] !== true) {
+                    loadTile(i);
+                }
+            } else {
+                if (isSelected[i] === true) {
+                    unloadTile(i);
+                }
+            }
+        }
+    }
+
+    initXR();
 </script>
 </body>
 </html>
