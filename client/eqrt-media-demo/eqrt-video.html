@@ -73,6 +73,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             } from "./js/render/core/renderer.js";
             import { SkyboxNode } from "./js/render/nodes/skybox.js";
             import { TileNode } from "./js/render/nodes/tile.js";
+            import {f} from "./js/chart/chunks/helpers.segment";
 
             const { XRWebGLLayer, XRRigidTransform } = window;
 
@@ -108,7 +109,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let xrButton = null;
             let xrSession = null;
             let xrRefSpace = null;
-            let stereoUtil = null;
 
             // WebGL scene globals.
             let gl = null;
@@ -134,8 +134,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let pointToServer = [];
             let predPoint = {};
             let lastPredPoint = {};
-            let predQuaternion = new THREE.Quaternion(0, 0, 0, 1);
             let predEuler = new THREE.Euler(0, 0, 0, eulerOrder);
+            let predQuaternion = new THREE.Quaternion(0, 0, 0, 1);
 
             let cnt = 0;
 
@@ -240,12 +240,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             function unloadTile(id) {
                 console.log("Unloading tile " + id);
-                let tileNode = tileNodes[id];
+                isSelected[id] = false;
                 let video = tileVideos[id];
                 if (video) {
                     video.pause();
                 }
-                isSelected[id] = false;
+                let tileNode = tileNodes[id];
                 scene.removeNode(tileNode);
             }
 
@@ -494,9 +494,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     let y = pose.transform.orientation.y;
                     let z = pose.transform.orientation.z;
                     let w = pose.transform.orientation.w;
-                    quaternion.set(x, y, z, w);
 
                     sampleTimes++;
+
                     if (sampleTimes % 6 === 0) {
                         pointToServer.push(x);
                         pointToServer.push(y);
@@ -508,38 +508,43 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         }
                     }
 
-                    // init euler value
-                    euler.setFromQuaternion(quaternion, eulerOrder);
-
-                    // Convert rotation angle to polar angle(pitch) and azimuthal angle(yaw)
-                    let angles = eulerToYawPitch(euler);
-                    yaw = angles.yaw;
-                    pitch = angles.pitch;
-                    yaws.push(yaw);
-                    pitches.push(pitch);
-
-                    // Convert yaw and pitch to XYZ
-                    let point = convertXYZ(yaw, pitch);
-                    viewPoint.x = point.x;
-                    viewPoint.y = point.y;
-                    viewPoint.z = point.z;
-
                     cnt++;
 
                     // update every 1 second
                     if (cnt >= 90) {
+                        // reset cnt
                         cnt = 0;
+
+                        // init euler value
+                        quaternion.set(x, y, z, w);
+                        euler.setFromQuaternion(quaternion, eulerOrder);
+
+                        // Convert rotation angle to polar angle(pitch) and azimuthal angle(yaw)
+                        let angles = eulerToYawPitch(euler);
+                        yaw = angles.yaw;
+                        pitch = angles.pitch;
+                        yaws.push(yaw);
+                        pitches.push(pitch);
+
+                        // Convert yaw and pitch to XYZ
+                        let point = convertXYZ(yaw, pitch);
+                        viewPoint.x = point.x;
+                        viewPoint.y = point.y;
+                        viewPoint.z = point.z;
                         xs.push(point.x);
                         ys.push(point.y);
                         zs.push(point.z);
-                        console.log(
-                            "predPoint = " + JSON.stringify(lastPredPoint)
-                        );
+
                         console.log("realPoint = " + JSON.stringify(viewPoint));
-                        let errorX = Math.abs(lastPredPoint.x - viewPoint.x);
-                        let errorY = Math.abs(lastPredPoint.y - viewPoint.y);
-                        let errorZ = Math.abs(lastPredPoint.z - viewPoint.z);
-                        console.log(errorX, errorY, errorZ);
+                        if (lastPredPoint !== null) {
+                            console.log(
+                                "predPoint = " + JSON.stringify(lastPredPoint)
+                            );
+                            let errorX = Math.abs(lastPredPoint.x - viewPoint.x);
+                            let errorY = Math.abs(lastPredPoint.y - viewPoint.y);
+                            let errorZ = Math.abs(lastPredPoint.z - viewPoint.z);
+                            console.log(errorX, errorY, errorZ);
+                        }
                         updateTiles();
                     }
                 }
