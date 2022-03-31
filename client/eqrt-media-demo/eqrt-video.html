@@ -103,6 +103,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let tileCenters = [];
             let tileVideos = [];
             let enhanceDash = [];
+            let timingSyncTo = null;
+            let mediaSyncs = []
 
             // XR globals.
             let xrButton = null;
@@ -183,6 +185,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         isSelected.push(false);
                         tileVideos.push(null);
                         enhanceDash.push(null);
+                        mediaSyncs.push(null);
 
                         let tileNode = new TileNode({
                             thetaStart: thetaStart,
@@ -210,8 +213,19 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         if (isSelected[id]) {
                             tileNode.setVideo(video);
                             scene.addNode(tileNode);
-                            video.play();
                             video.currentTime = baseVideo.currentTime;
+                            video.play();
+                            if (timingSyncTo) {
+                                timingSyncTo.update({
+                                    position: baseVideo.currentTime,
+                                    velocity: 1.0
+                                });
+                            }
+                            if (mediaSyncs[id] === null) {
+                                mediaSyncs[id] = new MCorp.mediaSync(tileVideos[id], timingSyncTo);
+                            } else {
+                                mediaSyncs[id].pause(false);
+                            }
                         }
                     };
                 }
@@ -272,6 +286,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         })
                     );
                     baseVideo.play();
+                    timingSyncTo = new TIMINGSRC.TimingObject({
+                        position: baseVideo.currentTime,
+                    });
                 };
             }
 
