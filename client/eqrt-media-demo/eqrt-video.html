@@ -69,15 +69,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             const { XRWebGLLayer, XRRigidTransform } = window;
 
-            let baseDash = null;
-            let baseVideo = null;
-            let baseVideoNeedRedraw = false;
-            let baseAngle = 0;
             let baseLayout = null;
-            let baseFPS = 0;
-            let baseUrl = null;
-            let baseWidth = 0;
-            let baseHeight = 0;
             let tileWidth = 0;
             let tileHeight = 0;
             let rows = 0;
@@ -204,7 +196,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     tileVideos[id] = video;
                     video.load();
                     video.oncanplay = () => {
-                        canplayCnt++;
                         tileNode.setVideo(video);
                         scene.addNode(tileNode);
                         video.play();
@@ -231,13 +222,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             async function initXR() {
                 let data = await myFetch("./source.json");
-                baseAngle = data.angle;
-                baseFPS = data.fps;
                 rows = data.rows;
                 cols = data.cols;
-                baseUrl = data.baseUrl;
-                baseWidth = data.baseWidth;
-                baseHeight = data.baseHeight;
                 tileWidth = data.tileWidth;
                 tileHeight = data.tileHeight;
                 baseLayout = data.layout;
@@ -282,7 +268,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 if (xrSession) {
                     xrSession.end();
                 }
-                baseVideo.pause();
                 gl = null;
             }
 
@@ -338,7 +323,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         )
                     );
                     console.log("onXRFrame");
-                    // baseVideo.play();
                     xrSession.requestAnimationFrame(onXRFrame);
                 });
             }
