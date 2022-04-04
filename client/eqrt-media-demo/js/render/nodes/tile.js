@@ -97,7 +97,7 @@ export class TileNode extends Node {
     this._video_texture = new VideoTexture(video);
   }
 
-  haveVideo() {
+  hasVideo() {
     return !!this._video_texture;
   }
 
