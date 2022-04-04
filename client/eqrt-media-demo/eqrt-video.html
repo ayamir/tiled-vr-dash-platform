@@ -92,7 +92,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let tilePositions = [];
             let tileNodes = [];
 
-            let threshold = 0.8;
+            let threshold = 1.6;
             let isSelected = [];
             let tileCenters = [];
             let tileVideos = [];
@@ -131,6 +131,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let predQuaternion = new THREE.Quaternion(0, 0, 0, 1);
 
             let cnt = 0;
+
+            let dashSettings = {
+                streaming: {
+                    abr: {
+                        useDefaultABRRules: true,
+                        ABRStrategy: "abrThroughout",
+                        additionalAbrRules: {
+                            insufficientBufferRule: true,
+                            switchHistoryRule: false,
+                            droppedFramesRule: false,
+                            abandonRequestsRule: false
+                        }
+                    },
+                    buffer: {
+                        fastSwitchEnabled: true
+                    }
+                }
+            }
 
             function myFetch(source) {
                 return fetch(source).then((response) => {
@@ -211,17 +229,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 let video = tileVideos[id];
                 if (enhanceDash[id] === null) {
                     let dash = dashjs.MediaPlayer().create();
+                    dash.updateSettings(dashSettings);
                     dash.initialize(video, urls[id], true);
-                    dash.updateSettings({
-                        streaming: {
-                            stableBufferTime: 3, // 一般质量下，稳定期的buffer大小
-                            bufferTimeAtTopQuality: 5, // 如果使用的是最高质量，给予其更高的buffer长度
-                            bufferTimeAtTopQualityLongForm: 20, // 当内容被判断为LongForm时，最高质量给予的buffer长度
-                            longFormContentDurationThreshold: 200, // 多长被判断为long form内容
-                            scheduleWhilePaused: false, // 当播放pause时，阻止后台下载
-                            fastSwitchEnabled: true // 当视频的quality发生up时，清空之后的buffer，换取最新版本的内容
-                        }
-                    });
                     enhanceDash[id] = dash;
                 }
                 if (tileNode.haveVideo() && video.paused) {
@@ -248,14 +257,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 baseVideo.preload = "auto";
                 baseVideo.autoload = true;
                 baseDash = dashjs.MediaPlayer().create();
+                baseDash.updateSettings(dashSettings);
                 baseDash.initialize(baseVideo, baseUrl, true);
-                baseDash.updateSettings({
-                    fastSwitchEnabled: true, // 黑块率较高的清空下，基础流也是需要提升质量的
-                    stableBufferTime: 30, // buffer尽可能的长
-                    bufferTimeAtTopQuality: 60, // 最高质量不用担心rebuffer，所以可以尽可能的给较长的buffer
-                    bufferTimeAtTopQualityLongForm: 120,
-                    longFormContentDurationThreshold: 200
-                });
                 baseVideo.load();
                 baseVideo.oncanplay = () => {
                     scene.addNode(
