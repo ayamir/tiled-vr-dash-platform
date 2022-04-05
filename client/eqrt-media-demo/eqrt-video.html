@@ -88,7 +88,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let isSelected = [];
             let tileCenters = [];
             let tileVideos = [];
-            let enhanceDash = [];
+            let tileDashs = [];
 
             // XR globals.
             let xrButton = null;
@@ -128,13 +128,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let dashSettings = {
                 streaming: {
                     abr: {
-                        useDefaultABRRules: true,
-                        ABRStrategy: "abrThroughout",
-                        additionalAbrRules: {
-                            insufficientBufferRule: true,
-                            switchHistoryRule: false,
-                            droppedFramesRule: false,
-                            abandonRequestsRule: false
+                        // useDefaultABRRules: true,
+                        // ABRStrategy: "abrThroughout",
+                        // additionalAbrRules: {
+                        //     insufficientBufferRule: true,
+                        //     switchHistoryRule: false,
+                        //     droppedFramesRule: false,
+                        //     abandonRequestsRule: false
+                        // },
+                        autoSwitchBitrate: {
+                            audio: false,
+                            video: false
                         }
                     },
                     buffer: {
@@ -177,7 +181,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         // init tile array
                         isSelected.push(false);
                         tileVideos.push(null);
-                        enhanceDash.push(null);
+                        tileDashs.push(null);
                         currTimes.push(0);
 
                         let tileNode = new TileNode({
@@ -207,22 +211,29 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     };
                 }
                 let video = tileVideos[id];
-                if (enhanceDash[id] === null) {
+                if (tileDashs[id] === null) {
                     let dash = dashjs.MediaPlayer().create();
                     dash.updateSettings(dashSettings);
-                    dash.initialize(video, urls[id], false);
-                    enhanceDash[id] = dash;
+                    dash.initialize(video, urls[id], true);
+                    dash.on("streamInitialized", () => {
+                        dash.setQualityFor("video", 0, true);
+                    });
+                    tileDashs[id] = dash;
                 }
             }
 
             function loadTile(id) {
                 isSelected[id] = true;
                 console.warn("Tile " + id + " was selected.");
+                let dash = tileDashs[id];
+                dash.setQualityFor("video", 1, false);
             }
 
             function unloadTile(id) {
                 isSelected[id] = false;
                 console.warn("Tile " + id + " was not selected.");
+                let dash = tileDashs[id];
+                dash.setQualityFor("video", 0, false);
             }
 
             async function initXR() {
@@ -447,7 +458,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     currTimes[i] = tileVideos[i].currentTime;
                 }
                 const variance = calVariance();
-                console.log("currTimes' variance = " + variance);
                 if (variance > 0.1 && cycle > 1) {
                     alignTimes();
                 }
@@ -526,15 +536,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         ys.push(point.y);
                         zs.push(point.z);
 
-                        console.log("realPoint = " + JSON.stringify(viewPoint));
+                        // console.log("realPoint = " + JSON.stringify(viewPoint));
                         if (lastPredPoint !== null) {
-                            console.log(
-                                "predPoint = " + JSON.stringify(lastPredPoint)
-                            );
+                            // console.log(
+                            //     "predPoint = " + JSON.stringify(lastPredPoint)
+                            // );
                             let errorX = Math.abs(lastPredPoint.x - viewPoint.x);
                             let errorY = Math.abs(lastPredPoint.y - viewPoint.y);
                             let errorZ = Math.abs(lastPredPoint.z - viewPoint.z);
-                            console.log(errorX, errorY, errorZ);
+                            // console.log(errorX, errorY, errorZ);
                         }
                         updateTiles();
                     }
