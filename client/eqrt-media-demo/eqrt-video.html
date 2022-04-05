@@ -74,6 +74,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let tileHeight = 0;
             let rows = 0;
             let cols = 0;
+            let tileSum = 0;
             let urls = null;
 
             let unitTheta = 0;
@@ -122,6 +123,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let predQuaternion = new THREE.Quaternion(0, 0, 0, 1);
 
             let frameCnt = 0;
+            let cycle = 0;
 
             let dashSettings = {
                 streaming: {
@@ -139,7 +141,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         fastSwitchEnabled: true
                     }
                 }
-            }
+            };
+
+            let currTimes = [];
 
             function myFetch(source) {
                 return fetch(source).then((response) => {
@@ -174,6 +178,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         isSelected.push(false);
                         tileVideos.push(null);
                         enhanceDash.push(null);
+                        currTimes.push(0);
 
                         let tileNode = new TileNode({
                             thetaStart: thetaStart,
@@ -205,7 +210,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 if (enhanceDash[id] === null) {
                     let dash = dashjs.MediaPlayer().create();
                     dash.updateSettings(dashSettings);
-                    dash.initialize(video, urls[id], true);
+                    dash.initialize(video, urls[id], false);
                     enhanceDash[id] = dash;
                 }
             }
@@ -224,6 +229,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 let data = await myFetch("./source.json");
                 rows = data.rows;
                 cols = data.cols;
+                tileSum = rows * cols;
                 tileWidth = data.tileWidth;
                 tileHeight = data.tileHeight;
                 baseLayout = data.layout;
@@ -309,7 +315,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 session.updateRenderState({ baseLayer: glLayer });
 
                 // init all tiles
-                for (let i = 0; i < rows * cols; i++) {
+                for (let i = 0; i < tileSum; i++) {
                     initTile(i);
                 }
 
@@ -423,6 +429,45 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 pointToServer = [];
             }
 
+            function calMean(values) {
+                return (values.reduce((sum, current) => sum + current)) / values.length;
+            }
+
+            function calVariance() {
+                const meanTime = calMean(currTimes);
+                const squareDiffs = currTimes.map((currTime) => {
+                    const diff = currTime - meanTime;
+                    return diff * diff;
+                });
+                return calMean(squareDiffs);
+            }
+
+            function updateCurrTimes() {
+                for (let i = 0; i < tileSum; i++) {
+                    currTimes[i] = tileVideos[i].currentTime;
+                }
+                const variance = calVariance();
+                console.log("currTimes' variance = " + variance);
+                if (variance > 0.1 && cycle > 1) {
+                    alignTimes();
+                }
+            }
+
+            function alignTimes() {
+                let id, minTime = 0;
+                for (id = 0; id < tileSum; id++) {
+                    if (isSelected[id] === true) {
+                        minTime = currTimes[id];
+                    }
+                }
+                for (let i = 0; i < tileSum; i++) {
+                    if (i !== id) {
+                        tileVideos[i].currentTime = minTime;
+                    }
+                }
+                console.warn("align finished.");
+            }
+
             function onXRFrame(time, frame) {
                 let pose = frame.getViewerPose(xrRefSpace);
                 scene.startFrame();
@@ -457,6 +502,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     if (frameCnt >= 90) {
                         // reset cnt
                         frameCnt = 0;
+                        cycle++;
+
+                        updateCurrTimes();
 
                         // init euler value
                         quaternion.set(x, y, z, w);
@@ -563,7 +611,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             function updateTiles() {
                 // Iterate all tiles' centers
-                for (let i = 0; i < rows * cols; i++) {
+                for (let i = 0; i < tileSum; i++) {
                     let distance = getCenterDistanceSquare(i);
                     if (distance <= threshold) {
                         if (isSelected[i] !== true) {

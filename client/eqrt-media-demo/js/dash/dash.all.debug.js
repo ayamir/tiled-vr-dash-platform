@@ -19734,7 +19734,7 @@ var Utils = /*#__PURE__*/function () {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getVersionString", function() { return getVersionString; });
-var VERSION = '4.3.0';
+var VERSION = '4.3.1';
 function getVersionString() {
   return VERSION;
 }
@@ -30191,8 +30191,8 @@ function MediaPlayer() {
   var instance, logger, source, protectionData, mediaPlayerInitialized, streamingInitialized, playbackInitialized, autoPlay, abrController, schemeLoaderFactory, timelineConverter, mediaController, protectionController, metricsReportingController, mssHandler, offlineController, adapter, mediaPlayerModel, errHandler, baseURLController, capabilities, capabilitiesFilter, streamController, textController, gapController, playbackController, dashMetrics, manifestModel, cmcdModel, videoModel, uriFragmentModel, domStorage, segmentBaseController, licenseRequestFilters, licenseResponseFilters, customCapabilitiesFilters;
   /*
   ---------------------------------------------------------------------------
-       INIT FUNCTIONS
-   ---------------------------------------------------------------------------
+        INIT FUNCTIONS
+    ---------------------------------------------------------------------------
   */
 
   function setup() {
@@ -30521,8 +30521,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       PLAYBACK FUNCTIONS
-   ---------------------------------------------------------------------------
+        PLAYBACK FUNCTIONS
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -30894,8 +30894,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       AUTO BITRATE
-   ---------------------------------------------------------------------------
+        AUTO BITRATE
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31005,8 +31005,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       MEDIA PLAYER CONFIGURATION
-   ---------------------------------------------------------------------------
+        MEDIA PLAYER CONFIGURATION
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31222,8 +31222,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       OFFLINE
-   ---------------------------------------------------------------------------
+        OFFLINE
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31238,8 +31238,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       METRICS
-   ---------------------------------------------------------------------------
+        METRICS
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31258,8 +31258,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       TEXT MANAGEMENT
-   ---------------------------------------------------------------------------
+        TEXT MANAGEMENT
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31356,8 +31356,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       VIDEO ELEMENT MANAGEMENT
-   ---------------------------------------------------------------------------
+        VIDEO ELEMENT MANAGEMENT
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31442,8 +31442,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       STREAM AND TRACK MANAGEMENT
-   ---------------------------------------------------------------------------
+        STREAM AND TRACK MANAGEMENT
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31607,8 +31607,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       PROTECTION MANAGEMENT
-   ---------------------------------------------------------------------------
+        PROTECTION MANAGEMENT
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31783,8 +31783,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       THUMBNAILS MANAGEMENT
-   ---------------------------------------------------------------------------
+        THUMBNAILS MANAGEMENT
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31826,8 +31826,8 @@ function MediaPlayer() {
   }
   /*
   ---------------------------------------------------------------------------
-       TOOLS AND OTHERS FUNCTIONS
-   ---------------------------------------------------------------------------
+        TOOLS AND OTHERS FUNCTIONS
+    ---------------------------------------------------------------------------
   */
 
   /**
@@ -31877,6 +31877,17 @@ function MediaPlayer() {
     }
 
     return source;
+  }
+  /**
+   * Sets the source to a new manifest URL or object without reloading
+   * Useful for updating CDN tokens
+   * @param urlOrManifest
+   */
+
+
+  function updateSource(urlOrManifest) {
+    source = urlOrManifest;
+    streamController.load(source);
   }
   /**
    * Use this method to set a source URL to a valid MPD manifest file OR
@@ -32253,6 +32264,7 @@ function MediaPlayer() {
         mediaElement: getVideoElement(),
         adapter: adapter,
         dashMetrics: dashMetrics,
+        mediaPlayerModel: mediaPlayerModel,
         events: _core_events_Events__WEBPACK_IMPORTED_MODULE_25__["default"],
         constants: _constants_Constants__WEBPACK_IMPORTED_MODULE_1__["default"],
         metricsConstants: _constants_MetricsConstants__WEBPACK_IMPORTED_MODULE_3__["default"]
@@ -32426,6 +32438,7 @@ function MediaPlayer() {
     getTTMLRenderingDiv: getTTMLRenderingDiv,
     getVideoElement: getVideoElement,
     getSource: getSource,
+    updateSource: updateSource,
     getCurrentLiveLatency: getCurrentLiveLatency,
     getTopBitrateInfoFor: getTopBitrateInfoFor,
     setAutoPlay: setAutoPlay,
@@ -32928,6 +32941,12 @@ var MediaPlayerEvents = /*#__PURE__*/function (_EventsBase) {
      */
 
     _this.REPRESENTATION_SWITCH = 'representationSwitch';
+    /**
+     * Event that is dispatched whenever an adaptation set is removed due to all representations not being supported.
+     * @event MediaPlayerEvents#ADAPTATION_SET_REMOVED_NO_CAPABILITIES
+     */
+
+    _this.ADAPTATION_SET_REMOVED_NO_CAPABILITIES = 'adaptationSetRemovedNoCapabilities';
     return _this;
   }
 
@@ -36455,6 +36474,7 @@ var MetricsConstants = /*#__PURE__*/function () {
       this.MANIFEST_UPDATE_TRACK_INFO = 'ManifestUpdateRepresentationInfo';
       this.PLAY_LIST = 'PlayList';
       this.DVB_ERRORS = 'DVBErrors';
+      this.HTTP_REQUEST_DVB_REPORTING_TYPE = 'DVBReporting';
     }
   }]);
 
@@ -45269,7 +45289,8 @@ function MetricsController(config) {
       rangeController.initialize(metricsEntry.Range);
       reportingController = Object(_ReportingController__WEBPACK_IMPORTED_MODULE_1__["default"])(context).create({
         debug: config.debug,
-        metricsConstants: config.metricsConstants
+        metricsConstants: config.metricsConstants,
+        mediaPlayerModel: config.mediaPlayerModel
       });
       reportingController.initialize(metricsEntry.Reporting, rangeController);
       metricsHandlersController = Object(_MetricsHandlersController__WEBPACK_IMPORTED_MODULE_2__["default"])(context).create({
@@ -46164,13 +46185,15 @@ function ReportingFactory(config) {
   var instance;
   var logger = config.debug ? config.debug.getLogger(instance) : {};
   var metricsConstants = config.metricsConstants;
+  var mediaPlayerModel = config.mediaPlayerModel || {};
 
   function create(entry, rangeController) {
     var reporting;
 
     try {
       reporting = knownReportingSchemeIdUris[entry.schemeIdUri](context).create({
-        metricsConstants: metricsConstants
+        metricsConstants: metricsConstants,
+        mediaPlayerModel: mediaPlayerModel
       });
       reporting.initialize(entry, rangeController);
     } catch (e) {
@@ -46256,6 +46279,7 @@ function DVBReporting(config) {
   var allowPendingRequestsToCompleteOnReset = true;
   var pendingRequests = [];
   var metricsConstants = config.metricsConstants;
+  var mediaPlayerModel = config.mediaPlayerModel;
 
   function setup() {
     metricSerialiser = Object(_utils_MetricSerialiser__WEBPACK_IMPORTED_MODULE_0__["default"])(context).getInstance();
@@ -46265,6 +46289,7 @@ function DVBReporting(config) {
 
   function doGetRequest(url, successCB, failureCB) {
     var req = new XMLHttpRequest();
+    req.withCredentials = mediaPlayerModel.getXHRWithCredentialsForType(metricsConstants.HTTP_REQUEST_DVB_REPORTING_TYPE);
 
     var oncomplete = function oncomplete() {
       var reqIndex = pendingRequests.indexOf(req);
@@ -49281,7 +49306,7 @@ function MetricsModel(config) {
     vo.s = s;
     vo.d = d;
     vo.b = b;
-    vo.t = t;
+    vo._t = t;
     httpRequest.trace.push(vo);
 
     if (!httpRequest.interval) {
@@ -53854,7 +53879,7 @@ function KeySystemClearKey(config) {
   }
 
   function getLicenseRequestFromMessage(message) {
-    return JSON.parse(String.fromCharCode.apply(null, new Uint8Array(message)));
+    return JSON.stringify(JSON.parse(String.fromCharCode.apply(null, new Uint8Array(message))));
   }
 
   function getLicenseServerURLFromInitData()
@@ -57869,7 +57894,7 @@ function ThroughputHistory(config) {
 
       if (calculationMode === _constants_Constants__WEBPACK_IMPORTED_MODULE_0__["default"].ABR_FETCH_THROUGHPUT_CALCULATION_MOOF_PARSING) {
         var sumOfThroughputValues = httpRequest.trace.reduce(function (a, b) {
-          return a + b.t;
+          return a + b._t;
         }, 0);
         throughput = Math.round(sumOfThroughputValues / httpRequest.trace.length);
       }
@@ -58518,6 +58543,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _core_events_Events__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../../../core/events/Events */ "./src/core/events/Events.js");
 /* harmony import */ var _core_Debug__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../../../core/Debug */ "./src/core/Debug.js");
 /* harmony import */ var _MediaPlayerEvents__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../../MediaPlayerEvents */ "./src/streaming/MediaPlayerEvents.js");
+/* harmony import */ var _constants_Constants__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../../constants/Constants */ "./src/streaming/constants/Constants.js");
 /**
  * The copyright in this software is being made available under the BSD License,
  * included below. This software may be subject to other third party and contributor
@@ -58549,6 +58575,7 @@ __webpack_require__.r(__webpack_exports__);
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 // For a description of the BOLA adaptive bitrate (ABR) algorithm, see http://arxiv.org/abs/1601.06748
+
 
 
 
@@ -58779,11 +58806,15 @@ function BolaRule(config) {
     checkBolaStateStableBufferTime(bolaState, mediaType);
   }
 
-  function onBufferEmpty() {
+  function onBufferEmpty(e) {
     // if we rebuffer, we don't want the placeholder buffer to artificially raise BOLA quality
-    for (var mediaType in bolaStateDict) {
-      if (bolaStateDict.hasOwnProperty(mediaType) && bolaStateDict[mediaType].state === BOLA_STATE_STEADY) {
-        bolaStateDict[mediaType].placeholderBuffer = 0;
+    var mediaType = e.mediaType; // if audio buffer runs empty (due to track switch for example) then reset placeholder buffer only for audio (to avoid decrease video BOLA quality)
+
+    var stateDict = mediaType === _constants_Constants__WEBPACK_IMPORTED_MODULE_8__["default"].AUDIO ? [_constants_Constants__WEBPACK_IMPORTED_MODULE_8__["default"].AUDIO] : bolaStateDict;
+
+    for (var _mediaType in stateDict) {
+      if (bolaStateDict.hasOwnProperty(_mediaType) && bolaStateDict[_mediaType].state === BOLA_STATE_STEADY) {
+        bolaStateDict[_mediaType].placeholderBuffer = 0;
       }
     }
   }
@@ -65053,12 +65084,17 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _core_FactoryMaker__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../core/FactoryMaker */ "./src/core/FactoryMaker.js");
 /* harmony import */ var _core_Debug__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../core/Debug */ "./src/core/Debug.js");
 /* harmony import */ var _constants_Constants__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../constants/Constants */ "./src/streaming/constants/Constants.js");
+/* harmony import */ var _core_EventBus__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../core/EventBus */ "./src/core/EventBus.js");
+/* harmony import */ var _core_events_Events__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../core/events/Events */ "./src/core/events/Events.js");
+
+
 
 
 
 
 function CapabilitiesFilter() {
   var context = this.context;
+  var eventBus = Object(_core_EventBus__WEBPACK_IMPORTED_MODULE_3__["default"])(context).getInstance();
   var instance, adapter, capabilities, settings, logger, customCapabilitiesFilters;
 
   function setup() {
@@ -65132,6 +65168,9 @@ function CapabilitiesFilter() {
           var supported = as.Representation_asArray && as.Representation_asArray.length > 0;
 
           if (!supported) {
+            eventBus.trigger(_core_events_Events__WEBPACK_IMPORTED_MODULE_4__["default"].ADAPTATION_SET_REMOVED_NO_CAPABILITIES, {
+              adaptationSet: as
+            });
             logger.warn("AdaptationSet has been removed because of no supported Representation");
           }
 
@@ -65570,7 +65609,7 @@ function DOMStorage(config) {
     }
     /* When Safari (OS X or iOS) is in private browsing mode, it appears as though localStorage is available, but trying to call setItem throws an exception.
      http://stackoverflow.com/questions/14555347/html5-localstorage-error-with-safari-quota-exceeded-err-dom-exception-22-an
-      Check if the storage can be used
+       Check if the storage can be used
      */
 
 
@@ -69229,7 +69268,7 @@ function HTTPRequestTrace() {
    * @public
    */
 
-  this.t = null;
+  this._t = null;
 };
 
 HTTPRequest.GET = 'GET';
@@ -69241,6 +69280,7 @@ HTTPRequest.INDEX_SEGMENT_TYPE = 'IndexSegment';
 HTTPRequest.MEDIA_SEGMENT_TYPE = 'MediaSegment';
 HTTPRequest.BITSTREAM_SWITCHING_SEGMENT_TYPE = 'BitstreamSwitchingSegment';
 HTTPRequest.MSS_FRAGMENT_INFO_SEGMENT_TYPE = 'FragmentInfoSegment';
+HTTPRequest.DVB_REPORTING_TYPE = 'DVBReporting';
 HTTPRequest.LICENSE = 'license';
 HTTPRequest.OTHER_TYPE = 'other';
 
