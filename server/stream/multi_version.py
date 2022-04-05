@@ -44,14 +44,20 @@ def transcode(video_dir: str) -> None:
             utils.create_dir(output_dir)
             process(
                 video_path,
-                os.path.join(output_dir, "L1.mp4"),
+                os.path.join(output_dir, "L2.mp4"),
                 25,
+                f'{tile_name.replace(".mp4", "").replace("_","-")}-L2',
+            )
+            process(
+                video_path,
+                os.path.join(output_dir, "L1.mp4"),
+                30,
                 f'{tile_name.replace(".mp4", "").replace("_","-")}-L1',
             )
             process(
                 video_path,
                 os.path.join(output_dir, "L0.mp4"),
-                40,
+                35,
                 f'{tile_name.replace(".mp4", "").replace("_","-")}-L0',
             )
         shutil.rmtree(tiled_video_root_dir)
