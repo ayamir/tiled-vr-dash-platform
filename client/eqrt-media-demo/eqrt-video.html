@@ -86,9 +86,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             let threshold = 1.6;
             let isSelected = [];
+            let initTileIds = [];
             let tileCenters = [];
             let tileVideos = [];
-            let tileDashs = [];
+            let tileDashes = [];
 
             // XR globals.
             let xrButton = null;
@@ -161,7 +162,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 video.crossOrigin = "anonymous";
                 video.preload = "auto";
                 video.autoplay = false;
-                video.muted = id !== 0;
+                video.muted = id !== initTileIds[0];
             }
 
             function createEnhanceNode() {
@@ -181,7 +182,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         // init tile array
                         isSelected.push(false);
                         tileVideos.push(null);
-                        tileDashs.push(null);
+                        tileDashes.push(null);
                         currTimes.push(0);
 
                         let tileNode = new TileNode({
@@ -211,29 +212,29 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     };
                 }
                 let video = tileVideos[id];
-                if (tileDashs[id] === null) {
+                if (tileDashes[id] === null) {
                     let dash = dashjs.MediaPlayer().create();
                     dash.updateSettings(dashSettings);
                     dash.initialize(video, urls[id], true);
                     dash.on("streamInitialized", () => {
                         dash.setQualityFor("video", 0, true);
                     });
-                    tileDashs[id] = dash;
+                    tileDashes[id] = dash;
                 }
             }
 
             function loadTile(id) {
                 isSelected[id] = true;
                 console.warn("Tile " + id + " was selected.");
-                let dash = tileDashs[id];
-                dash.setQualityFor("video", 1, false);
+                let dash = tileDashes[id];
+                dash.setQualityFor("video", 2, false);
             }
 
             function unloadTile(id) {
                 isSelected[id] = false;
                 console.warn("Tile " + id + " was not selected.");
-                let dash = tileDashs[id];
-                dash.setQualityFor("video", 0, false);
+                let dash = tileDashes[id];
+                dash.setQualityFor("video", 1, false);
             }
 
             async function initXR() {
@@ -253,6 +254,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 unitYaw = 360 / rows;
 
                 createEnhanceNode();
+
+                initTileIds[0] = 1 * rows;
+                initTileIds[1] = 2 * rows - 1;
+                initTileIds[2] = 2 * rows;
+                initTileIds[3] = 3 * rows - 1;
 
                 xrButton = new WebXRButton({
                     onEndSession: onEndSession,
@@ -326,8 +332,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 session.updateRenderState({ baseLayer: glLayer });
 
                 // init all tiles
-                for (let i = 0; i < tileSum; i++) {
+                for (let i of initTileIds) {
                     initTile(i);
+                }
+
+                for (let i = 0; i < tileSum; i++) {
+                    if (!initTileIds.includes(i)) {
+                        initTile(i);
+                    }
                 }
 
                 // enter xrSpace
@@ -458,7 +470,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     currTimes[i] = tileVideos[i].currentTime;
                 }
                 const variance = calVariance();
-                if (variance > 0.1 && cycle > 1) {
+                if (variance > 0.01 && cycle > 1) {
                     alignTimes();
                 }
             }
