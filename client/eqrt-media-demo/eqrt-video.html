@@ -54,9 +54,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     </head>
 
     <body>
-        <main style="text-align: center">
-            <p>Click 'Enter VR' to see content</p>
-            <canvas height="400" id="chart" width="400"></canvas>
+        <main id="main" style="text-align: center">
         </main>
         <script type="module">
             import { WebXRButton } from "./js/util/webxr-button.js";
@@ -90,6 +88,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let tileCenters = [];
             let tileVideos = [];
             let tileDashes = [];
+            let dashStatistics = [];
 
             // XR globals.
             let xrButton = null;
@@ -185,6 +184,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         tileDashes.push(null);
                         currTimes.push(0);
 
+                        let statistics = {};
+                        statistics.bufferLevels = [];
+                        statistics.bitrates = [];
+                        statistics.frameRates = [];
+                        statistics.resolutions = [];
+                        dashStatistics.push(statistics);
+
                         let tileNode = new TileNode({
                             thetaStart: thetaStart,
                             thetaLength: unitTheta,
@@ -214,10 +220,71 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 let video = tileVideos[id];
                 if (tileDashes[id] === null) {
                     let dash = dashjs.MediaPlayer().create();
+                    let eventPoller = setInterval(() => {
+                        let streamInfo = dash.getActiveStream().getStreamInfo();
+                        let dashMetrics = dash.getDashMetrics();
+                        let dashAdapter = dash.getDashAdapter();
+
+                        if (dashMetrics && streamInfo) {
+                            const periodIdx = streamInfo.index;
+                            let repSwitch =
+                                dashMetrics.getCurrentRepresentationSwitch(
+                                    "video",
+                                    true
+                                );
+                            let bufferLevel = dashMetrics.getCurrentBufferLevel(
+                                "video",
+                                true
+                            );
+                            let bitrate = repSwitch
+                                ? Math.round(
+                                      dashAdapter.getBandwidthForRepresentation(
+                                          repSwitch.to,
+                                          periodIdx
+                                      ) / 1000
+                                  )
+                                : NaN;
+                            let adaptation = dashAdapter.getAdaptationForType(
+                                periodIdx,
+                                "video",
+                                streamInfo
+                            );
+                            let currentRep =
+                                adaptation.Representation_asArray.find(
+                                    (rep) => {
+                                        return rep.id === repSwitch.to;
+                                    }
+                                );
+                            let frameRate = currentRep.frameRate;
+
+                            dashStatistics[id].bufferLevels.push(bufferLevel);
+                            dashStatistics[id].bitrates.push(bitrate);
+                            dashStatistics[id].frameRates.push(frameRate);
+                        }
+                    }, 1000);
+
+                    if (video.webkitVideoDecodedByteCount !== undefined) {
+                        var lastDecodedByteCount = 0;
+                        const bitrateInterval = 5;
+                        var bitrateCalculator = setInterval(() => {
+                            let calculateBitrate =
+                                (((video.webkitVideoDecodedByteCount -
+                                    lastDecodedByteCount) /
+                                    1000) *
+                                    8) /
+                                bitrateInterval;
+                            lastDecodedByteCount =
+                                video.webkitVideoDecodedByteCount;
+                        }, bitrateInterval * 1000);
+                    }
                     dash.updateSettings(dashSettings);
                     dash.initialize(video, urls[id], true);
                     dash.on("streamInitialized", () => {
                         dash.setQualityFor("video", 0, true);
+                    });
+                    dash.on(dashjs.MediaPlayer.events["PLAYBACK_ENDED"], () => {
+                        clearInterval(eventPoller);
+                        clearInterval(bitrateCalculator);
                     });
                     tileDashes[id] = dash;
                 }
@@ -295,7 +362,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             }
 
             function onSessionEnded() {
-                drawChart();
+                // drawChart();
+                for (let i = 0; i < tileSum; i++) {
+                    drawStatistics(i);
+                }
             }
 
             function initGL() {
@@ -356,7 +426,60 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 });
             }
 
-            function drawChart() {
+            function drawStatistics(id) {
+                let dataCount = dashStatistics[id].bufferLevels.length;
+                for (let i = 1; i <= dataCount; i++) {
+                    labels.push("" + i);
+                }
+                let data = {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: "bufferLevel",
+                            backgroundColor: Samples.utils.color(0),
+                            borderColor: Samples.utils.color(0),
+                            data: dashStatistics[id].bufferLevels
+                        },
+                        {
+                            label: "bitrate",
+                            backgroundColor: Samples.utils.color(1),
+                            borderColor: Samples.utils.color(1),
+                            data: dashStatistics[id].bitrates
+                        },
+                        {
+                            label: "frameRate",
+                            backgroundColor: Samples.utils.color(2),
+                            borderColor: Samples.utils.color(2),
+                            data: dashStatistics[id].frameRates
+                        }
+                    ]
+                };
+
+                const canvas = document.createElement("canvas");
+                let lastIdName;
+                const idName = "statistics-" + id;
+                if (id === 0) {
+                    lastIdName = "main";
+                } else {
+                    lastIdName = "statistics-" + (id - 1);
+                }
+                canvas.setAttribute("id", idName);
+                const lastChart = document.getElementById(lastIdName);
+                if (lastChart)
+                    lastChart.append(canvas);
+                else
+                    console.log(lastIdName + " is null.");
+
+                const ctx = canvas.getContext("2d");
+                const config = {
+                    type: "line",
+                    data: data
+                };
+                const chart = new Chart(ctx, config);
+                console.log(idName, lastIdName);
+            }
+
+            function drawTrace() {
                 let dataCount = xs.length;
                 for (let i = 1; i <= dataCount; i++) {
                     labels.push("" + i);
@@ -397,7 +520,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     ]
                 };
                 const canvas = document.createElement("canvas");
-                document.querySelector("main").appendChild(canvas);
+                document.querySelector("main").append(canvas);
                 const ctx = canvas.getContext("2d");
                 const config = {
                     type: "line",
@@ -453,7 +576,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             }
 
             function calMean(values) {
-                return (values.reduce((sum, current) => sum + current)) / values.length;
+                return (
+                    values.reduce((sum, current) => sum + current) /
+                    values.length
+                );
             }
 
             function calVariance() {
@@ -476,7 +602,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             }
 
             function alignTimes() {
-                let id, minTime = 0;
+                let id,
+                    minTime = 0;
                 for (id = 0; id < tileSum; id++) {
                     if (isSelected[id] === true) {
                         minTime = currTimes[id];
@@ -553,9 +680,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                             // console.log(
                             //     "predPoint = " + JSON.stringify(lastPredPoint)
                             // );
-                            let errorX = Math.abs(lastPredPoint.x - viewPoint.x);
-                            let errorY = Math.abs(lastPredPoint.y - viewPoint.y);
-                            let errorZ = Math.abs(lastPredPoint.z - viewPoint.z);
+                            let errorX = Math.abs(
+                                lastPredPoint.x - viewPoint.x
+                            );
+                            let errorY = Math.abs(
+                                lastPredPoint.y - viewPoint.y
+                            );
+                            let errorZ = Math.abs(
+                                lastPredPoint.z - viewPoint.z
+                            );
                             // console.log(errorX, errorY, errorZ);
                         }
                         updateTiles();
