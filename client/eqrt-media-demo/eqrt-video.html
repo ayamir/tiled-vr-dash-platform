@@ -54,8 +54,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     </head>
 
     <body>
-        <main id="main" style="text-align: center">
-        </main>
+        <main id="main" style="text-align: center"></main>
         <script type="module">
             import { WebXRButton } from "./js/util/webxr-button.js";
             import { Scene } from "./js/render/scenes/scene.js";
@@ -84,6 +83,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             let threshold = 1.6;
             let isSelected = [];
+            let tileSequence = [];
             let initTileIds = [];
             let tileCenters = [];
             let tileVideos = [];
@@ -125,6 +125,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let frameCnt = 0;
             let cycle = 0;
 
+            let predictUrl = "https://10.112.79.143:5000/predict";
+            let traceUrl = "https://10.112.79.143:5001/trace";
+            let statisticsUrl = "https://10.112.79.143:5001/statistics";
+            let sequenceUrl = "https://10.112.79.143:5001/sequence";
+
             let dashSettings = {
                 streaming: {
                     abr: {
@@ -149,7 +154,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             let currTimes = [];
 
-            function myFetch(source) {
+            async function myFetch(source) {
                 return fetch(source).then((response) => {
                     return response.json();
                 });
@@ -188,7 +193,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         statistics.bufferLevels = [];
                         statistics.bitrates = [];
                         statistics.frameRates = [];
-                        statistics.resolutions = [];
                         dashStatistics.push(statistics);
 
                         let tileNode = new TileNode({
@@ -261,6 +265,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                             dashStatistics[id].bitrates.push(bitrate);
                             dashStatistics[id].frameRates.push(frameRate);
                         }
+
+                        if (id === 0) {
+                            recordTiles();
+                        }
                     }, 1000);
 
                     if (video.webkitVideoDecodedByteCount !== undefined) {
@@ -292,14 +300,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             function loadTile(id) {
                 isSelected[id] = true;
-                console.warn("Tile " + id + " was selected.");
                 let dash = tileDashes[id];
                 dash.setQualityFor("video", 2, false);
             }
 
             function unloadTile(id) {
                 isSelected[id] = false;
-                console.warn("Tile " + id + " was not selected.");
                 let dash = tileDashes[id];
                 dash.setQualityFor("video", 1, false);
             }
@@ -363,9 +369,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             function onSessionEnded() {
                 // drawChart();
-                for (let i = 0; i < tileSum; i++) {
-                    drawStatistics(i);
-                }
+                // for (let i = 0; i < tileSum; i++) {
+                //     drawStatistics(i);
+                // }
+                // post trace
+                let viewpoint = { x: xs, y: ys, z: zs };
+                postData(traceUrl, viewpoint);
+                // post statistics
+                postData(statisticsUrl, dashStatistics);
+                postData(sequenceUrl, tileSequence);
             }
 
             function initGL() {
@@ -426,134 +438,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 });
             }
 
-            function drawStatistics(id) {
-                let dataCount = dashStatistics[id].bufferLevels.length;
-                for (let i = 1; i <= dataCount; i++) {
-                    labels.push("" + i);
-                }
-                let data = {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: "bufferLevel",
-                            backgroundColor: Samples.utils.color(0),
-                            borderColor: Samples.utils.color(0),
-                            data: dashStatistics[id].bufferLevels
-                        },
-                        {
-                            label: "bitrate",
-                            backgroundColor: Samples.utils.color(1),
-                            borderColor: Samples.utils.color(1),
-                            data: dashStatistics[id].bitrates
-                        },
-                        {
-                            label: "frameRate",
-                            backgroundColor: Samples.utils.color(2),
-                            borderColor: Samples.utils.color(2),
-                            data: dashStatistics[id].frameRates
-                        }
-                    ]
-                };
-
-                const canvas = document.createElement("canvas");
-                let lastIdName;
-                const idName = "statistics-" + id;
-                if (id === 0) {
-                    lastIdName = "main";
-                } else {
-                    lastIdName = "statistics-" + (id - 1);
-                }
-                canvas.setAttribute("id", idName);
-                const lastChart = document.getElementById(lastIdName);
-                if (lastChart)
-                    lastChart.append(canvas);
-                else
-                    console.log(lastIdName + " is null.");
-
-                const ctx = canvas.getContext("2d");
-                const config = {
-                    type: "line",
-                    data: data
-                };
-                const chart = new Chart(ctx, config);
-                console.log(idName, lastIdName);
-            }
-
-            function drawTrace() {
-                let dataCount = xs.length;
-                for (let i = 1; i <= dataCount; i++) {
-                    labels.push("" + i);
-                }
-                let data = {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: "viewpoint.x",
-                            backgroundColor: Samples.utils.color(0),
-                            borderColor: Samples.utils.color(0),
-                            data: xs
-                        },
-                        {
-                            label: "viewpoint.y",
-                            backgroundColor: Samples.utils.color(1),
-                            borderColor: Samples.utils.color(1),
-                            data: ys
-                        },
-                        {
-                            label: "viewpoint.z",
-                            backgroundColor: Samples.utils.color(2),
-                            borderColor: Samples.utils.color(2),
-                            data: zs
-                        }
-                        // {
-                        // 	label: "yaw",
-                        // 	backgroundColor: Samples.utils.color(0),
-                        // 	borderColor: Samples.utils.color(0),
-                        // 	data: yaws
-                        // },
-                        // {
-                        // 	label: "pitch",
-                        // 	backgroundColor: Samples.utils.color(1),
-                        // 	borderColor: Samples.utils.color(1),
-                        // 	data: pitches
-                        // },
-                    ]
-                };
-                const canvas = document.createElement("canvas");
-                document.querySelector("main").append(canvas);
-                const ctx = canvas.getContext("2d");
-                const config = {
-                    type: "line",
-                    data: data
-                };
-                const chart = new Chart(ctx, config);
-
-                console.log(
-                    "StartYaw=" + yaws[0] + ", EndYaw=" + yaws[yaws.length - 1]
-                );
-                console.log(
-                    "StartPitch=" +
-                        pitches[0] +
-                        ", EndPitches=" +
-                        pitches[pitches.length - 1]
-                );
-            }
-
-            async function postData() {
-                let predictUrl = "https://10.112.79.143:5000/predict";
-                const response = await fetch(predictUrl, {
+            async function postData(url, content) {
+                const response = await fetch(url, {
                     method: "POST",
                     mode: "cors",
                     headers: {
                         "Content-Type": "application/json"
                     },
-                    body: JSON.stringify(pointToServer)
+                    body: JSON.stringify(content)
                 });
                 return response.json();
             }
 
             function sendData() {
-                postData().then((data) => {
+                postData(predictUrl, pointToServer).then((data) => {
                     let rawPredicted = data[0];
                     let selectedPred = rawPredicted[0];
                     let x = selectedPred[0];
@@ -596,7 +494,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     currTimes[i] = tileVideos[i].currentTime;
                 }
                 const variance = calVariance();
-                if (variance > 0.01 && cycle > 1) {
+                if (variance > 0.01 && cycle > 3) {
                     alignTimes();
                 }
             }
@@ -632,6 +530,26 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     let z = pose.transform.orientation.z;
                     let w = pose.transform.orientation.w;
 
+                    // init euler value
+                    quaternion.set(x, y, z, w);
+                    euler.setFromQuaternion(quaternion, eulerOrder);
+
+                    // Convert rotation angle to polar angle(pitch) and azimuthal angle(yaw)
+                    let angles = eulerToYawPitch(euler);
+                    yaw = angles.yaw;
+                    pitch = angles.pitch;
+                    yaws.push(yaw);
+                    pitches.push(pitch);
+
+                    // Convert yaw and pitch to XYZ
+                    let point = convertXYZ(yaw, pitch);
+                    viewPoint.x = point.x;
+                    viewPoint.y = point.y;
+                    viewPoint.z = point.z;
+                    xs.push(point.x);
+                    ys.push(point.y);
+                    zs.push(point.z);
+
                     sampleTimes++;
 
                     if (sampleTimes % 6 === 0) {
@@ -655,31 +573,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
                         updateCurrTimes();
 
-                        // init euler value
-                        quaternion.set(x, y, z, w);
-                        euler.setFromQuaternion(quaternion, eulerOrder);
-
-                        // Convert rotation angle to polar angle(pitch) and azimuthal angle(yaw)
-                        let angles = eulerToYawPitch(euler);
-                        yaw = angles.yaw;
-                        pitch = angles.pitch;
-                        yaws.push(yaw);
-                        pitches.push(pitch);
-
-                        // Convert yaw and pitch to XYZ
-                        let point = convertXYZ(yaw, pitch);
-                        viewPoint.x = point.x;
-                        viewPoint.y = point.y;
-                        viewPoint.z = point.z;
-                        xs.push(point.x);
-                        ys.push(point.y);
-                        zs.push(point.z);
-
-                        // console.log("realPoint = " + JSON.stringify(viewPoint));
+                        console.log("realPoint = " + JSON.stringify(viewPoint));
                         if (lastPredPoint !== null) {
-                            // console.log(
-                            //     "predPoint = " + JSON.stringify(lastPredPoint)
-                            // );
+                            console.log(
+                                "predPoint = " + JSON.stringify(lastPredPoint)
+                            );
                             let errorX = Math.abs(
                                 lastPredPoint.x - viewPoint.x
                             );
@@ -689,7 +587,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                             let errorZ = Math.abs(
                                 lastPredPoint.z - viewPoint.z
                             );
-                            // console.log(errorX, errorY, errorZ);
+                            console.log(errorX, errorY, errorZ);
                         }
                         updateTiles();
                     }
@@ -778,6 +676,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         }
                     }
                 }
+            }
+
+            function recordTiles() {
+                let selected = [];
+                for (let i = 0; i < tileSum; i++) {
+                    if (isSelected[i] === true) {
+                        selected.push(i + 1);
+                    }
+                }
+                tileSequence.push(selected);
             }
 
             initXR();
