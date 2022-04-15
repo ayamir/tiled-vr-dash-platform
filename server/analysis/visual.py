@@ -111,5 +111,7 @@ if __name__ == "__main__":
         drawBufferLevel()
     elif choice == 1:
         drawBitrate()
-    else:
-        drawTileSequence()
+    elif choice == 2:
+        drawFrameRate()
+
+    drawTileSequence()
