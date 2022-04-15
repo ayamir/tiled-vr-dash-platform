@@ -71,5 +71,16 @@ def statistics_visual():
         return "200"
 
 
+@app.route("/sequence", methods=["POST"])
+@cross_origin()
+def sequence_visual():
+    if request.method == "POST":
+        sequence = request.get_json()
+        sequence_object = json.dumps(sequence)
+        with open("sequence.json", "w") as f:
+            f.write(sequence_object)
+        return "200"
+
+
 if __name__ == "__main__":
     app.run(debug=True, host=host, port=port, ssl_context=(crt, key))

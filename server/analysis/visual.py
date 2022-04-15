@@ -21,20 +21,21 @@ def drawBufferLevel():
         bufferLevels = item["bufferLevels"]
         bufferLevelsList.append(bufferLevels)
 
-    frameList = []
+    timeline = []
     for i in range(len(bufferLevelsList[0])):
-        frameList.append(i)
+        timeline.append(i)
 
     colors = iter([cm.tab20(i) for i in range(20)])
 
     for i in range(TILE_NUM):
-        plt.plot(frameList,
+        plt.plot(timeline,
                  bufferLevelsList[i],
                  label=("Tile-" + str(i + 1)),
                  color=next(colors))
 
     plt.title("BufferLevel Chart")
-    plt.xlabel("Frame")
+    plt.xlabel("Time")
+    plt.xticks(ticks=timeline)
     plt.ylabel("BufferLevels")
     plt.grid(True)
     plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
@@ -47,20 +48,21 @@ def drawBitrate():
         bitrates = item["bitrates"]
         bitratesList.append(bitrates)
 
-    frameList = []
+    timeline = []
     for i in range(len(bitratesList[0])):
-        frameList.append(i)
+        timeline.append(i)
 
     colors = iter([cm.tab20(i) for i in range(20)])
 
     for i in range(TILE_NUM):
-        plt.plot(frameList,
+        plt.plot(timeline,
                  bitratesList[i],
                  label=("Tile-" + str(i + 1)),
                  color=next(colors))
 
     plt.title("Bitrate Chart")
-    plt.xlabel("Frame")
+    plt.xlabel("Time")
+    plt.xticks(ticks=timeline)
     plt.ylabel("Bitrate")
     plt.grid(True)
     plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
@@ -73,24 +75,33 @@ def drawFrameRate():
         frameRates = item["frameRates"]
         frameRatesList.append(frameRates)
 
-    frameList = []
+    timeline = []
     for i in range(len(frameRatesList[0])):
-        frameList.append(i)
+        timeline.append(i)
 
     colors = iter([cm.tab20(i) for i in range(20)])
 
     for i in range(TILE_NUM):
-        plt.plot(frameList,
+        plt.plot(timeline,
                  frameRatesList[i],
                  label=("Tile-" + str(i + 1)),
                  color=next(colors))
 
     plt.title("FrameRate Chart")
-    plt.xlabel("Frame")
+    plt.xlabel("Time")
+    plt.xticks(ticks=timeline)
     plt.ylabel("FrameRate")
     plt.grid(True)
     plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     plt.savefig("frameRate.png")
+
+
+def drawTileSequence():
+    f = open("sequence.json")
+    sequence = json.load(f)
+    for item in sequence:
+        print(item)
+    print(len(sequence))
 
 
 if __name__ == "__main__":
@@ -101,4 +112,4 @@ if __name__ == "__main__":
     elif choice == 1:
         drawBitrate()
     else:
-        drawFrameRate()
+        drawTileSequence()
