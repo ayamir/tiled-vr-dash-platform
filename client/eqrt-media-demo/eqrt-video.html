@@ -42,15 +42,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         />
         <link href="./css/common.css" rel="stylesheet" />
 
-        <title>Equirect Layer</title>
+        <title>Tile-based Equirect Panoramic Video Player</title>
         <!-- Dash video dependency -->
         <script src="./js/dash/dash.all.debug.js"></script>
-        <!-- Chart -->
-        <script src="./js/chart/chart.js"></script>
-        <script src="./js/chart/chart.utils.js"></script>
-        <script src="./js/chart/chartjs-plugin-datalabels.js"></script>
-
-        <script src="./js/three.js"></script>
     </head>
 
     <body>
@@ -88,6 +82,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let tileCenters = [];
             let tileVideos = [];
             let tileDashes = [];
+            let addedVideos = [];
             let dashStatistics = [];
 
             // XR globals.
@@ -122,8 +117,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let predEuler = new THREE.Euler(0, 0, 0, eulerOrder);
             let predQuaternion = new THREE.Quaternion(0, 0, 0, 1);
 
+            let addedCnt = 0;
             let frameCnt = 0;
-            let cycle = 0;
 
             let predictUrl = "https://10.112.79.143:5000/predict";
             let traceUrl = "https://10.112.79.143:5001/trace";
@@ -185,6 +180,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
                         // init tile array
                         isSelected.push(false);
+                        addedVideos.push(false);
                         tileVideos.push(null);
                         tileDashes.push(null);
                         currTimes.push(0);
@@ -216,9 +212,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     tileVideos[id] = video;
                     video.load();
                     video.oncanplay = () => {
-                        tileNode.setVideo(video);
-                        scene.addNode(tileNode);
-                        video.play();
+                        if (addedVideos[id] === false) {
+                            tileNode.setVideo(video);
+                            scene.addNode(tileNode);
+                            video.play();
+                            addedCnt++;
+                            addedVideos[id] = true;
+                            console.log("video id = " + id);
+                            console.error("addedCnt = " + addedCnt);
+                        }
                     };
                 }
                 let video = tileVideos[id];
@@ -414,14 +416,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 session.updateRenderState({ baseLayer: glLayer });
 
                 // init all tiles
-                for (let i of initTileIds) {
-                    initTile(i);
-                }
-
                 for (let i = 0; i < tileSum; i++) {
-                    if (!initTileIds.includes(i)) {
-                        initTile(i);
-                    }
+                    initTile(i);
                 }
 
                 // enter xrSpace
@@ -494,7 +490,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     currTimes[i] = tileVideos[i].currentTime;
                 }
                 const variance = calVariance();
-                if (variance > 0.01 && cycle > 3) {
+                if (addedCnt >= tileSum && variance > 0.01) {
                     alignTimes();
                 }
             }
@@ -569,25 +565,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     if (frameCnt >= 90) {
                         // reset cnt
                         frameCnt = 0;
-                        cycle++;
 
                         updateCurrTimes();
 
-                        console.log("realPoint = " + JSON.stringify(viewPoint));
+                        // console.log("realPoint = " + JSON.stringify(viewPoint));
                         if (lastPredPoint !== null) {
-                            console.log(
-                                "predPoint = " + JSON.stringify(lastPredPoint)
-                            );
-                            let errorX = Math.abs(
-                                lastPredPoint.x - viewPoint.x
-                            );
-                            let errorY = Math.abs(
-                                lastPredPoint.y - viewPoint.y
-                            );
-                            let errorZ = Math.abs(
-                                lastPredPoint.z - viewPoint.z
-                            );
-                            console.log(errorX, errorY, errorZ);
+                            // console.log(
+                            //     "predPoint = " + JSON.stringify(lastPredPoint)
+                            // );
+                            // let errorX = Math.abs(
+                            //     lastPredPoint.x - viewPoint.x
+                            // );
+                            // let errorY = Math.abs(
+                            //     lastPredPoint.y - viewPoint.y
+                            // );
+                            // let errorZ = Math.abs(
+                            //     lastPredPoint.z - viewPoint.z
+                            // );
+                            // console.log(errorX, errorY, errorZ);
                         }
                         updateTiles();
                     }
