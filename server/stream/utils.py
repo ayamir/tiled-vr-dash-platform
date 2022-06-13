@@ -6,7 +6,7 @@ cwd = os.path.dirname(os.path.realpath(__file__))
 workspace_dir = cwd + "/videos/"  # 批处理文件所在的目录
 video_src_dir = workspace_dir
 video_output_dir = cwd + "/output/"
-host_ip = "10.112.79.143"
+host_ip = "bupt.wanl5.top"
 
 
 def create_dir(path: str) -> bool:

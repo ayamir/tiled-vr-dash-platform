@@ -46,7 +46,7 @@ def generate_json(
     rows: int,
     cols: int,
     video_output_dir: str,
-    url_prefix: str = "https://10.112.79.143/files/070",
+    url_prefix: str = "http://" + host_ip + ":5555/files/070",
     fov: int = 100,
     is_rotate: bool = False,
     rotate_speed: float = 1.0,
@@ -55,10 +55,7 @@ def generate_json(
 ) -> None:
 
     url_suffix = "/output/stream.mpd"
-    dest = utils.cwd + "/../client/react-xrplayer/public/mock/view-tiled.json"
-
-    if is_https:
-        dest = "/opt/player/react-xrplayer/mock/view-tiled.json"
+    dest = utils.cwd + "/../../client/react-xrplayer/build/mock/view-tiled.json"
 
     res_urls = []
     res_url = {
@@ -87,6 +84,8 @@ def generate_json(
     }
 
     out_path = video_output_dir + "view-tiled.json"
+    print("out_path = " + out_path)
+    print("dest = " + dest)
 
     with open(out_path, "w") as outfile:
         json.dump(obj, outfile)
