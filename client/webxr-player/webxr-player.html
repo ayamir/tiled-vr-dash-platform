@@ -108,6 +108,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             let xs = [];
             let ys = [];
             let zs = [];
+            let pred_xs = [];
+            let pred_ys = [];
+            let pred_zs = [];
 
             let eulerOrder = "XYZ";
             let euler = new THREE.Euler(0, 0, 0, eulerOrder);
@@ -125,8 +128,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
             let predictUrl = "https://10.112.79.143:5000/predict";
             let traceUrl = "https://10.112.79.143:5001/trace";
+            let tracePredUrl = "https://10.112.79.143:5001/trace_pred";
             let statisticsUrl = "https://10.112.79.143:5001/statistics";
             let sequenceUrl = "https://10.112.79.143:5001/sequence";
+            let controlStartUrl = "https://10.112.79.143:5002/control_start";
+            let controlStopUrl = "https://10.112.79.143:5002/control_stop";
+
+            let loadTime = 0;
+            let loadTimeInterval;
+            let stuckTime = 0;
+            let avgFoVError = { sumX: 0, sumY: 0, sumZ: 0, cnt: 0 };
 
             let dashSettings = {
                 streaming: {
@@ -374,16 +385,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
             }
 
             function onSessionEnded() {
-                // drawChart();
-                // for (let i = 0; i < tileSum; i++) {
-                //     drawStatistics(i);
-                // }
                 // post trace
                 let viewpoint = { x: xs, y: ys, z: zs };
                 postData(traceUrl, viewpoint);
+                let predViewpoint = { x: pred_xs, y: pred_ys, z: pred_zs };
+                postData(tracePredUrl, predViewpoint);
                 // post statistics
                 postData(statisticsUrl, dashStatistics);
                 postData(sequenceUrl, tileSequence);
+
+                const avgX = avgFoVError.sumX / avgFoVError.cnt;
+                const avgY = avgFoVError.sumY / avgFoVError.cnt;
+                const avgZ = avgFoVError.sumZ / avgFoVError.cnt;
+                console.log(
+                    "averageErrorX = " + avgX,
+                    ", averageErrorY = " + avgY + ", averageErrorZ = " + avgZ
+                );
+
+                console.log("loadTime = " + loadTime / 1000);
             }
 
             function initGL() {
@@ -423,6 +442,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 for (let i = 0; i < tileSum; i++) {
                     initTile(i);
                 }
+
+                loadTimeInterval = setInterval(() => {
+                    loadTime += 100;
+                }, 100);
 
                 // enter xrSpace
                 xrSession.requestReferenceSpace("local").then((refSpace) => {
@@ -467,6 +490,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                     predPoint.x = point.x;
                     predPoint.y = point.y;
                     predPoint.z = point.z;
+                    pred_xs.push(point.x);
+                    pred_ys.push(point.y);
+                    pred_zs.push(point.z);
                     isPred = true;
                 });
                 sampleTimes = 0;
@@ -495,6 +521,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                 }
                 const variance = calVariance();
                 if (addedCnt >= tileSum && variance > 0.01) {
+                    clearInterval(loadTimeInterval);
                     alignTimes();
                 }
             }
@@ -558,7 +585,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                         pointToServer.push(z);
                         pointToServer.push(w);
                         // every 90 frames
-                        if (sampleTimes === 90) {
+                        if (sampleTimes === 12) {
                             sendData();
                         }
                     }
@@ -572,21 +599,27 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
                         updateCurrTimes();
 
-                        // console.log("realPoint = " + JSON.stringify(viewPoint));
+                        console.log("realPoint = " + JSON.stringify(viewPoint));
                         if (lastPredPoint !== null) {
-                            // console.log(
-                            //     "predPoint = " + JSON.stringify(lastPredPoint)
-                            // );
-                            // let errorX = Math.abs(
-                            //     lastPredPoint.x - viewPoint.x
-                            // );
-                            // let errorY = Math.abs(
-                            //     lastPredPoint.y - viewPoint.y
-                            // );
-                            // let errorZ = Math.abs(
-                            //     lastPredPoint.z - viewPoint.z
-                            // );
-                            // console.log(errorX, errorY, errorZ);
+                            console.log(
+                                "predPoint = " + JSON.stringify(lastPredPoint)
+                            );
+                            let errorX = Math.abs(
+                                lastPredPoint.x - viewPoint.x
+                            );
+                            let errorY = Math.abs(
+                                lastPredPoint.y - viewPoint.y
+                            );
+                            let errorZ = Math.abs(
+                                lastPredPoint.z - viewPoint.z
+                            );
+                            console.log(errorX, errorY, errorZ);
+                            if (!isNaN(errorX)) {
+                                avgFoVError.sumX += errorX;
+                                avgFoVError.sumY += errorY;
+                                avgFoVError.sumZ += errorZ;
+                                avgFoVError.cnt += 1;
+                            }
                         }
                         updateTiles();
                     }
