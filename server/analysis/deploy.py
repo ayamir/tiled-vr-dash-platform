@@ -41,16 +41,40 @@ def trace_visual():
         xs = points["x"]
         ys = points["y"]
         zs = points["z"]
-        fig = plt.figure(facecolor="Black")
+        fig = plt.figure(facecolor="White")
         ax = plt.axes(projection="3d")
         ax.set_facecolor("#1DD4AF")
         for i in range(len(xs)):
             xx = xs[i]
             yy = ys[i]
             zz = zs[i]
-            ax.scatter(xx, yy, zz, color="k", s=20)
+            ax.scatter(xx, yy, zz, color="yellow", s=20)
         plt.title("Viewpoint Trace")
         plt.savefig("trace.png")
+        return "200"
+
+
+@app.route("/trace_pred", methods=["POST"])
+@cross_origin()
+def trace_pred_visual():
+    if request.method == "POST":
+        points = request.get_json()
+        json_object = json.dumps(points)
+        with open("trace_pred.json", "w") as f:
+            f.write(json_object)
+        xs = points["x"]
+        ys = points["y"]
+        zs = points["z"]
+        fig = plt.figure(facecolor="White")
+        ax = plt.axes(projection="3d")
+        ax.set_facecolor("#1DD4AF")
+        for i in range(len(xs)):
+            xx = xs[i]
+            yy = ys[i]
+            zz = zs[i]
+            ax.scatter(xx, yy, zz, color="blue", s=20)
+        plt.title("Predicted Viewpoint Trace")
+        plt.savefig("trace_pred.png")
         return "200"
 
 
@@ -62,12 +86,9 @@ def statistics_visual():
         json_object = json.dumps(statistics)
         with open("statistics.json", "w") as f:
             f.write(json_object)
-        cmder.runCmd(
-            "/home/ayamir/anaconda3/envs/vp-lstm/bin/python visual.py 0")
-        cmder.runCmd(
-            "/home/ayamir/anaconda3/envs/vp-lstm/bin/python visual.py 1")
-        cmder.runCmd(
-            "/home/ayamir/anaconda3/envs/vp-lstm/bin/python visual.py 2")
+        cmder.runCmd("/home/ayamir/anaconda3/envs/vp-lstm/bin/python visual.py 0")
+        cmder.runCmd("/home/ayamir/anaconda3/envs/vp-lstm/bin/python visual.py 1")
+        cmder.runCmd("/home/ayamir/anaconda3/envs/vp-lstm/bin/python visual.py 2")
         return "200"
 
 
