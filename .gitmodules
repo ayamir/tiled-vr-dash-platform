@@ -1,3 +1,6 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:70766d813c99fbf70c2c099889909a6c3b8f21f6e47d6d012a7b1c02891aa228
-size 261
+[submodule "client/react-xrplayer"]
+	path = client/react-xrplayer
+	url = https://github.com/ayamir/react-xrplayer
+[submodule "server/vp/trace-based-fov-predict"]
+	path = server/vp/trace-based-fov-predict
+	url = git@github.com:ayamir/trace-based-fov-predict.git
