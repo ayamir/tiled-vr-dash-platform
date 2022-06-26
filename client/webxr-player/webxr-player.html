@@ -1,3 +1,726 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:87ce72a75d3c5c2e11c2e0c8680b0221175f03dcb9c901563cc01a05e73c284b
-size 27460
+<!DOCTYPE html>
+<!--
+Copyright 2021 The Immersive Web Community Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            content="width=device-width, initial-scale=1, user-scalable=no"
+            name="viewport"
+        />
+        <meta content="yes" name="mobile-web-app-capable" />
+        <meta content="yes" name="apple-mobile-web-app-capable" />
+        <link
+            href="./media/favicon-32x32.png"
+            rel="icon"
+            sizes="32x32"
+            type="image/png"
+        />
+        <link
+            href="./media/favicon-96x96.png"
+            rel="icon"
+            sizes="96x96"
+            type="image/png"
+        />
+        <link href="./css/common.css" rel="stylesheet" />
+
+        <title>Tile-based Equirect Panoramic Video Player</title>
+        <!-- Dash video dependency -->
+        <script src="./js/dash/dash.all.debug.js"></script>
+
+        <!-- Three.js library dependency -->
+        <script src="./js/third-party/three.js"></script>
+    </head>
+
+    <body>
+        <main id="main" style="text-align: center"></main>
+        <script type="module">
+            import { WebXRButton } from "./js/util/webxr-button.js";
+            import { Scene } from "./js/render/scenes/scene.js";
+            import {
+                Renderer,
+                createWebGLContext
+            } from "./js/render/core/renderer.js";
+            import { TileNode } from "./js/render/nodes/tile.js";
+
+            const { XRWebGLLayer, XRRigidTransform } = window;
+
+            let baseLayout = null;
+            let tileWidth = 0;
+            let tileHeight = 0;
+            let rows = 0;
+            let cols = 0;
+            let tileSum = 0;
+            let urls = null;
+
+            let unitTheta = 0;
+            let unitPhi = 0;
+            let unitPitch = 0;
+            let unitYaw = 0;
+            let tilePositions = [];
+            let tileNodes = [];
+
+            let threshold = 1.6;
+            let isSelected = [];
+            let tileSequence = [];
+            let initTileIds = [];
+            let tileCenters = [];
+            let tileVideos = [];
+            let tileDashes = [];
+            let addedVideos = [];
+            let dashStatistics = [];
+
+            // XR globals.
+            let xrButton = null;
+            let xrSession = null;
+            let xrRefSpace = null;
+
+            // WebGL scene globals.
+            let gl = null;
+            let renderer = null;
+            let scene = new Scene();
+
+            let labels = [];
+            let radius = 1.0;
+            let yaw = 0;
+            let pitch = 0;
+            let yaws = [];
+            let pitches = [];
+            let viewPoint = {};
+            let xs = [];
+            let ys = [];
+            let zs = [];
+            let pred_xs = [];
+            let pred_ys = [];
+            let pred_zs = [];
+
+            let eulerOrder = "XYZ";
+            let euler = new THREE.Euler(0, 0, 0, eulerOrder);
+            let quaternion = new THREE.Quaternion(0, 0, 0, 1);
+            let sampleTimes = 0;
+            let isPred = false;
+            let pointToServer = [];
+            let predPoint = {};
+            let lastPredPoint = {};
+            let predEuler = new THREE.Euler(0, 0, 0, eulerOrder);
+            let predQuaternion = new THREE.Quaternion(0, 0, 0, 1);
+
+            let addedCnt = 0;
+            let frameCnt = 0;
+
+            let predictUrl = "https://10.112.79.143:5000/predict";
+            let traceUrl = "https://10.112.79.143:5001/trace";
+            let tracePredUrl = "https://10.112.79.143:5001/trace_pred";
+            let statisticsUrl = "https://10.112.79.143:5001/statistics";
+            let sequenceUrl = "https://10.112.79.143:5001/sequence";
+            let controlStartUrl = "https://10.112.79.143:5002/control_start";
+            let controlStopUrl = "https://10.112.79.143:5002/control_stop";
+
+            let loadTime = 0;
+            let loadTimeInterval;
+            let stuckTime = 0;
+            let avgFoVError = { sumX: 0, sumY: 0, sumZ: 0, cnt: 0 };
+
+            let dashSettings = {
+                streaming: {
+                    abr: {
+                        // useDefaultABRRules: true,
+                        // ABRStrategy: "abrThroughout",
+                        // additionalAbrRules: {
+                        //     insufficientBufferRule: true,
+                        //     switchHistoryRule: false,
+                        //     droppedFramesRule: false,
+                        //     abandonRequestsRule: false
+                        // },
+                        autoSwitchBitrate: {
+                            audio: false,
+                            video: false
+                        }
+                    },
+                    buffer: {
+                        fastSwitchEnabled: true
+                    }
+                }
+            };
+
+            let currTimes = [];
+
+            async function myFetch(source) {
+                return fetch(source).then((response) => {
+                    return response.json();
+                });
+            }
+
+            function initVideoNode(id, video, width, height) {
+                video.width = width;
+                video.height = height;
+                video.crossOrigin = "anonymous";
+                video.preload = "auto";
+                video.autoplay = false;
+                video.muted = id !== initTileIds[0];
+            }
+
+            function createEnhanceNode() {
+                console.log("initializing tile position and center...");
+                for (let i = 0; i < cols; i++) {
+                    let thetaStart = i * unitTheta;
+
+                    let tilePitch = unitPitch * i + unitPitch / 2;
+                    tilePitch = 90 - tilePitch;
+
+                    for (let j = 0; j < rows; j++) {
+                        let phiStart = j * unitPhi;
+
+                        let tileYaw = unitYaw * j + unitYaw / 2;
+                        let point = convertXYZ(tileYaw, tilePitch);
+
+                        // init tile array
+                        isSelected.push(false);
+                        addedVideos.push(false);
+                        tileVideos.push(null);
+                        tileDashes.push(null);
+                        currTimes.push(0);
+
+                        let statistics = {};
+                        statistics.bufferLevels = [];
+                        statistics.bitrates = [];
+                        statistics.frameRates = [];
+                        dashStatistics.push(statistics);
+
+                        let tileNode = new TileNode({
+                            thetaStart: thetaStart,
+                            thetaLength: unitTheta,
+                            phiStart: phiStart,
+                            phiLength: unitPhi
+                        });
+                        tileNodes.push(tileNode);
+
+                        tileCenters.push(point);
+                    }
+                }
+            }
+
+            function initTile(id) {
+                if (tileVideos[id] === null) {
+                    let tileNode = tileNodes[id];
+                    let video = document.createElement("video");
+                    initVideoNode(id, video, tileWidth, tileHeight);
+                    tileVideos[id] = video;
+                    video.load();
+                    video.oncanplay = () => {
+                        if (addedVideos[id] === false) {
+                            tileNode.setVideo(video);
+                            scene.addNode(tileNode);
+                            video.play();
+                            addedCnt++;
+                            addedVideos[id] = true;
+                            console.log(
+                                "video id = " + id + ", addedCnt = " + addedCnt
+                            );
+                        }
+                    };
+                }
+                let video = tileVideos[id];
+                if (tileDashes[id] === null) {
+                    let dash = dashjs.MediaPlayer().create();
+                    let eventPoller = setInterval(() => {
+                        let streamInfo = dash.getActiveStream().getStreamInfo();
+                        let dashMetrics = dash.getDashMetrics();
+                        let dashAdapter = dash.getDashAdapter();
+
+                        if (dashMetrics && streamInfo) {
+                            const periodIdx = streamInfo.index;
+                            let repSwitch =
+                                dashMetrics.getCurrentRepresentationSwitch(
+                                    "video",
+                                    true
+                                );
+                            let bufferLevel = dashMetrics.getCurrentBufferLevel(
+                                "video",
+                                true
+                            );
+                            let bitrate = repSwitch
+                                ? Math.round(
+                                      dashAdapter.getBandwidthForRepresentation(
+                                          repSwitch.to,
+                                          periodIdx
+                                      ) / 1000
+                                  )
+                                : NaN;
+                            let adaptation = dashAdapter.getAdaptationForType(
+                                periodIdx,
+                                "video",
+                                streamInfo
+                            );
+                            let currentRep =
+                                adaptation.Representation_asArray.find(
+                                    (rep) => {
+                                        return rep.id === repSwitch.to;
+                                    }
+                                );
+                            let frameRate = currentRep.frameRate;
+
+                            dashStatistics[id].bufferLevels.push(bufferLevel);
+                            dashStatistics[id].bitrates.push(bitrate);
+                            dashStatistics[id].frameRates.push(frameRate);
+                        }
+
+                        if (id === 0) {
+                            recordTiles();
+                        }
+                    }, 1000);
+
+                    if (video.webkitVideoDecodedByteCount !== undefined) {
+                        var lastDecodedByteCount = 0;
+                        const bitrateInterval = 5;
+                        var bitrateCalculator = setInterval(() => {
+                            let calculateBitrate =
+                                (((video.webkitVideoDecodedByteCount -
+                                    lastDecodedByteCount) /
+                                    1000) *
+                                    8) /
+                                bitrateInterval;
+                            lastDecodedByteCount =
+                                video.webkitVideoDecodedByteCount;
+                        }, bitrateInterval * 1000);
+                    }
+                    dash.updateSettings(dashSettings);
+                    dash.initialize(video, urls[id], true);
+                    dash.on("streamInitialized", () => {
+                        dash.setQualityFor("video", 0, true);
+                    });
+                    dash.on(dashjs.MediaPlayer.events["PLAYBACK_ENDED"], () => {
+                        clearInterval(eventPoller);
+                        clearInterval(bitrateCalculator);
+                    });
+                    tileDashes[id] = dash;
+                }
+            }
+
+            function loadTile(id) {
+                isSelected[id] = true;
+                let dash = tileDashes[id];
+                dash.setQualityFor("video", 2, false);
+            }
+
+            function unloadTile(id) {
+                isSelected[id] = false;
+                let dash = tileDashes[id];
+                dash.setQualityFor("video", 1, false);
+            }
+
+            async function initXR() {
+                let data = await myFetch("./source.json");
+                rows = data.rows;
+                cols = data.cols;
+                tileSum = rows * cols;
+                tileWidth = data.tileWidth;
+                tileHeight = data.tileHeight;
+                baseLayout = data.layout;
+                urls = data.urls;
+
+                unitTheta = Math.PI / cols;
+                unitPhi = (2 * Math.PI) / rows;
+
+                unitPitch = 180 / cols;
+                unitYaw = 360 / rows;
+
+                createEnhanceNode();
+
+                initTileIds[0] = 1 * rows;
+                initTileIds[1] = 2 * rows - 1;
+                initTileIds[2] = 2 * rows;
+                initTileIds[3] = 3 * rows - 1;
+
+                xrButton = new WebXRButton({
+                    onEndSession: onEndSession,
+                    onRequestSession: onRequestSession
+                });
+                document.querySelector("main").appendChild(xrButton.domElement);
+
+                if (navigator.xr) {
+                    navigator.xr
+                        .isSessionSupported("immersive-vr")
+                        .then((supported) => {
+                            xrButton.enabled = supported;
+                        });
+                }
+            }
+
+            function onRequestSession() {
+                if (!xrSession) {
+                    navigator.xr
+                        .requestSession("immersive-vr", {
+                            requiredFeatures: ["local"]
+                        })
+                        .then(onSessionStarted);
+                } else {
+                    onEndSession();
+                }
+            }
+
+            function onEndSession() {
+                if (xrSession) {
+                    xrSession.end();
+                }
+                gl = null;
+            }
+
+            function onSessionEnded() {
+                // post trace
+                let viewpoint = { x: xs, y: ys, z: zs };
+                postData(traceUrl, viewpoint);
+                let predViewpoint = { x: pred_xs, y: pred_ys, z: pred_zs };
+                postData(tracePredUrl, predViewpoint);
+                // post statistics
+                postData(statisticsUrl, dashStatistics);
+                postData(sequenceUrl, tileSequence);
+
+                const avgX = avgFoVError.sumX / avgFoVError.cnt;
+                const avgY = avgFoVError.sumY / avgFoVError.cnt;
+                const avgZ = avgFoVError.sumZ / avgFoVError.cnt;
+                console.log(
+                    "averageErrorX = " + avgX,
+                    ", averageErrorY = " + avgY + ", averageErrorZ = " + avgZ
+                );
+
+                console.log("loadTime = " + loadTime / 1000);
+            }
+
+            function initGL() {
+                if (gl) {
+                    return;
+                }
+                gl = createWebGLContext({ xrCompatible: true });
+                document.body.appendChild(gl.canvas);
+                gl.clearColor(0.0, 0, 0, 0.0);
+
+                function onResize() {
+                    gl.canvas.width =
+                        gl.canvas.clientWidth * window.devicePixelRatio;
+                    gl.canvas.height =
+                        gl.canvas.clientHeight * window.devicePixelRatio;
+                }
+
+                window.addEventListener("resize", onResize);
+                onResize();
+
+                renderer = new Renderer(gl);
+                scene.setRenderer(renderer);
+            }
+
+            function onSessionStarted(session) {
+                xrSession = session;
+                scene.inputRenderer.useProfileControllerMeshes(session);
+                session.addEventListener("end", onSessionEnded);
+
+                initGL();
+                scene.inputRenderer.useProfileControllerMeshes(session);
+
+                let glLayer = new XRWebGLLayer(session, gl);
+                session.updateRenderState({ baseLayer: glLayer });
+
+                // init all tiles
+                for (let i = 0; i < tileSum; i++) {
+                    initTile(i);
+                }
+
+                loadTimeInterval = setInterval(() => {
+                    loadTime += 100;
+                }, 100);
+
+                // enter xrSpace
+                xrSession.requestReferenceSpace("local").then((refSpace) => {
+                    // Start from zero origin
+                    xrRefSpace = refSpace.getOffsetReferenceSpace(
+                        new XRRigidTransform(
+                            { x: 0, y: 0, z: 0 },
+                            { x: 0, y: 0, z: 0, w: 1 }
+                        )
+                    );
+                    console.log("onXRFrame");
+                    xrSession.requestAnimationFrame(onXRFrame);
+                });
+            }
+
+            async function postData(url, content) {
+                const response = await fetch(url, {
+                    method: "POST",
+                    mode: "cors",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(content)
+                });
+                return response.json();
+            }
+
+            function sendData() {
+                postData(predictUrl, pointToServer).then((data) => {
+                    let rawPredicted = data[0];
+                    let selectedPred = rawPredicted[0];
+                    let x = selectedPred[0];
+                    let y = selectedPred[1];
+                    let z = selectedPred[2];
+                    let w = selectedPred[3];
+                    predQuaternion.set(x, y, z, w);
+                    predEuler.setFromQuaternion(predQuaternion);
+                    let angles = eulerToYawPitch(predEuler);
+                    let yaw = angles.yaw;
+                    let pitch = angles.pitch;
+                    let point = convertXYZ(yaw, pitch);
+                    predPoint.x = point.x;
+                    predPoint.y = point.y;
+                    predPoint.z = point.z;
+                    pred_xs.push(point.x);
+                    pred_ys.push(point.y);
+                    pred_zs.push(point.z);
+                    isPred = true;
+                });
+                sampleTimes = 0;
+                pointToServer = [];
+            }
+
+            function calMean(values) {
+                return (
+                    values.reduce((sum, current) => sum + current) /
+                    values.length
+                );
+            }
+
+            function calVariance() {
+                const meanTime = calMean(currTimes);
+                const squareDiffs = currTimes.map((currTime) => {
+                    const diff = currTime - meanTime;
+                    return diff * diff;
+                });
+                return calMean(squareDiffs);
+            }
+
+            function updateCurrTimes() {
+                for (let i = 0; i < tileSum; i++) {
+                    currTimes[i] = tileVideos[i].currentTime;
+                }
+                const variance = calVariance();
+                if (addedCnt >= tileSum && variance > 0.01) {
+                    clearInterval(loadTimeInterval);
+                    alignTimes();
+                }
+            }
+
+            function alignTimes() {
+                let id,
+                    minTime = 0;
+                for (id = 0; id < tileSum; id++) {
+                    if (isSelected[id] === true) {
+                        minTime = currTimes[id];
+                    }
+                }
+                for (let i = 0; i < tileSum; i++) {
+                    if (i !== id) {
+                        tileVideos[i].currentTime = minTime;
+                    }
+                }
+                console.warn("align finished.");
+            }
+
+            function onXRFrame(time, frame) {
+                let pose = frame.getViewerPose(xrRefSpace);
+                scene.startFrame();
+
+                xrSession.requestAnimationFrame(onXRFrame);
+                scene.updateInputSources(frame, xrRefSpace);
+                scene.drawXRFrame(frame, pose);
+
+                if (pose) {
+                    // init quaternion value
+                    let x = pose.transform.orientation.x;
+                    let y = pose.transform.orientation.y;
+                    let z = pose.transform.orientation.z;
+                    let w = pose.transform.orientation.w;
+
+                    // init euler value
+                    quaternion.set(x, y, z, w);
+                    euler.setFromQuaternion(quaternion, eulerOrder);
+
+                    // Convert rotation angle to polar angle(pitch) and azimuthal angle(yaw)
+                    let angles = eulerToYawPitch(euler);
+                    yaw = angles.yaw;
+                    pitch = angles.pitch;
+                    yaws.push(yaw);
+                    pitches.push(pitch);
+
+                    // Convert yaw and pitch to XYZ
+                    let point = convertXYZ(yaw, pitch);
+                    viewPoint.x = point.x;
+                    viewPoint.y = point.y;
+                    viewPoint.z = point.z;
+                    xs.push(point.x);
+                    ys.push(point.y);
+                    zs.push(point.z);
+
+                    sampleTimes++;
+
+                    if (sampleTimes % 6 === 0) {
+                        pointToServer.push(x);
+                        pointToServer.push(y);
+                        pointToServer.push(z);
+                        pointToServer.push(w);
+                        // every 90 frames
+                        if (sampleTimes === 12) {
+                            sendData();
+                        }
+                    }
+
+                    frameCnt++;
+
+                    // update every 1 second
+                    if (frameCnt >= 90) {
+                        // reset cnt
+                        frameCnt = 0;
+
+                        updateCurrTimes();
+
+                        console.log("realPoint = " + JSON.stringify(viewPoint));
+                        if (lastPredPoint !== null) {
+                            console.log(
+                                "predPoint = " + JSON.stringify(lastPredPoint)
+                            );
+                            let errorX = Math.abs(
+                                lastPredPoint.x - viewPoint.x
+                            );
+                            let errorY = Math.abs(
+                                lastPredPoint.y - viewPoint.y
+                            );
+                            let errorZ = Math.abs(
+                                lastPredPoint.z - viewPoint.z
+                            );
+                            console.log(errorX, errorY, errorZ);
+                            if (!isNaN(errorX)) {
+                                avgFoVError.sumX += errorX;
+                                avgFoVError.sumY += errorY;
+                                avgFoVError.sumZ += errorZ;
+                                avgFoVError.cnt += 1;
+                            }
+                        }
+                        updateTiles();
+                    }
+                }
+                scene.endFrame();
+            }
+
+            function eulerToYawPitch(euler) {
+                let yaw,
+                    pitch = 0;
+                let x = THREE.Math.radToDeg(euler.x);
+                let y = THREE.Math.radToDeg(euler.y);
+                let z = THREE.Math.radToDeg(euler.z);
+                if (x < -90) {
+                    // back down
+                    pitch = x + 90;
+                    yaw = y + 180;
+                } else if (x > 90) {
+                    // back up
+                    pitch = x - 90;
+                    yaw = y + 180;
+                } else {
+                    // front
+                    pitch = x;
+                    if (y < 0) {
+                        // front right
+                        yaw = -y;
+                    } else {
+                        // front left
+                        yaw = 360 - y;
+                    }
+                }
+
+                if (Math.abs(x) - Math.abs(z) < 2) {
+                    // equator
+                    pitch = 0;
+                }
+                return { yaw: yaw, pitch: pitch };
+            }
+
+            function convertXYZ(yaw, pitch) {
+                pitch = THREE.Math.degToRad(pitch);
+                yaw = THREE.Math.degToRad(yaw);
+
+                let projection = radius * Math.cos(pitch);
+                let x = projection * Math.cos(yaw);
+                let y = projection * Math.sin(yaw);
+                let z = radius * Math.sin(pitch);
+
+                return { x: x, y: y, z: z };
+            }
+
+            function getCenterDistanceSquare(id) {
+                const { x, y, z } = tileCenters[id];
+                // TODO: more precise FoV representation
+                if (!isPred) {
+                    return (
+                        Math.pow(viewPoint.x - x, 2) +
+                        Math.pow(viewPoint.y - y, 2) +
+                        Math.pow(viewPoint.z - z, 2)
+                    );
+                } else {
+                    isPred = false;
+                    lastPredPoint.x = predPoint.x;
+                    lastPredPoint.y = predPoint.y;
+                    lastPredPoint.z = predPoint.z;
+                    return (
+                        Math.pow(predPoint.x - x, 2) +
+                        Math.pow(predPoint.y - y, 2) +
+                        Math.pow(predPoint.z - z, 2)
+                    );
+                }
+            }
+
+            function updateTiles() {
+                // Iterate all tiles' centers
+                for (let i = 0; i < tileSum; i++) {
+                    let distance = getCenterDistanceSquare(i);
+                    if (distance <= threshold) {
+                        if (isSelected[i] !== true) {
+                            loadTile(i);
+                        }
+                    } else {
+                        if (isSelected[i] === true) {
+                            unloadTile(i);
+                        }
+                    }
+                }
+            }
+
+            function recordTiles() {
+                let selected = [];
+                for (let i = 0; i < tileSum; i++) {
+                    if (isSelected[i] === true) {
+                        selected.push(i + 1);
+                    }
+                }
+                tileSequence.push(selected);
+            }
+
+            initXR();
+        </script>
+    </body>
+</html>

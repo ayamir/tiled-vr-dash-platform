@@ -1,3 +1,28 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:569d9e5f69666b3eba97ca5b8be10993cae85ed74fa827f6f52d71e79b2f49ea
-size 1398
+{
+    "fps": 30,
+    "rows": 5,
+    "cols": 3,
+    "baseUrl": "https://bupt.wanl5.top:5000/files/vp9/output/stream.mpd",
+    "baseWidth": 7680,
+    "baseHeight": 3840,
+    "tileWidth": 1536,
+    "tileHeight": 1280,
+    "layout": "mono",
+    "urls": [
+        "https://bupt.wanl5.top:5000/files/vp9/tile_0_0/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_1_0/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_2_0/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_3_0/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_4_0/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_0_1/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_1_1/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_2_1/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_3_1/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_4_1/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_0_2/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_1_2/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_2_2/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_3_2/output/stream.mpd",
+        "https://bupt.wanl5.top:5000/files/vp9/tile_4_2/output/stream.mpd"
+    ]
+}
