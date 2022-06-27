@@ -1,3 +1,6 @@
 [submodule "client/react-xrplayer"]
 	path = client/react-xrplayer
 	url = git@github.com:ayamir/react-xrplayer.git
+[submodule "server/vp/trace-based-fov-predict"]
+	path = server/vp/trace-based-fov-predict
+	url = git@github.com:ayamir/trace-based-fov-predict.git
